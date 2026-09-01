@@ -2,6 +2,7 @@
 Multilingual Category Templates for Zero-Shot Semantic Classification.
 Includes English, Hindi, and Hinglish examples for civic complaint categories.
 """
+from typing import Optional
 
 CATEGORY_DEPARTMENT_MAPPING = {
     "sanitation": "Solid Waste & Sanitation",
@@ -12,6 +13,40 @@ CATEGORY_DEPARTMENT_MAPPING = {
     "traffic": "Traffic & Public Transport",
     "general_review": "General Review Queue"
 }
+
+CATEGORY_ALIASES = {
+    "water": "water",
+    "water_supply": "water",
+    "water supply": "water",
+    "sanitation": "sanitation",
+    "solid_waste": "sanitation",
+    "solid_waste_sanitation": "sanitation",
+    "solid waste & sanitation": "sanitation",
+    "roads": "roads",
+    "roads_infrastructure": "roads",
+    "roads & infrastructure": "roads",
+    "streetlights": "streetlights",
+    "electrical": "streetlights",
+    "electrical_streetlights": "streetlights",
+    "electrical / street lighting": "streetlights",
+    "health": "health",
+    "public_health": "health",
+    "public health & vector control": "health",
+    "traffic": "traffic",
+    "traffic_transport": "traffic",
+    "traffic & public transport": "traffic",
+    "general_review": "general_review",
+    "general review queue": "general_review",
+}
+
+
+def normalize_category(category_or_dept: Optional[str]) -> Optional[str]:
+    """Normalizes any category alias or department name to canonical category key."""
+    if not category_or_dept:
+        return None
+    key = str(category_or_dept).lower().strip()
+    return CATEGORY_ALIASES.get(key, key)
+
 
 CATEGORY_TEMPLATES = {
     "sanitation": [

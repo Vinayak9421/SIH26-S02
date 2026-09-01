@@ -1,7 +1,8 @@
 from typing import List, Optional
 from collections import Counter
+import uuid as _uuid_mod
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models.issue import Issue
 from app.models.complaint import Complaint
@@ -12,7 +13,21 @@ from app.schemas.analytics import (
     HotspotItem,
     MapIssueMarker
 )
+from app.services.ai.category_templates import normalize_category
 from app.services.geocoding_service import geocode_address_sync
+
+
+def _is_valid_uuid(val: Optional[str]) -> bool:
+    """Check if string is a valid UUID."""
+    if not val:
+        return False
+    try:
+        _uuid_mod.UUID(str(val))
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 
 PRIORITY_WEIGHT = {
     "critical": 4,
@@ -85,8 +100,33 @@ class AnalyticsService:
         complaint_query = db.query(Complaint)
 
         if department_key:
-            issue_query = issue_query.filter(Issue.category == department_key)
-            complaint_query = complaint_query.filter(Complaint.ai_category == department_key)
+            norm_cat = normalize_category(department_key)
+            if _is_valid_uuid(department_key):
+                issue_query = issue_query.filter(
+                    or_(
+                        Issue.department_id == department_key,
+                        Issue.category == norm_cat
+                    )
+                )
+                complaint_query = complaint_query.filter(
+                    or_(
+                        Complaint.department_id == department_key,
+                        Complaint.ai_category == norm_cat
+                    )
+                )
+            else:
+                issue_query = issue_query.filter(
+                    or_(
+                        Issue.category == norm_cat,
+                        Issue.category == department_key
+                    )
+                )
+                complaint_query = complaint_query.filter(
+                    or_(
+                        Complaint.ai_category == norm_cat,
+                        Complaint.ai_category == department_key
+                    )
+                )
 
         issues = issue_query.all()
         complaints = complaint_query.all()
@@ -126,7 +166,21 @@ class AnalyticsService:
         )
 
         if department_key:
-            query = query.filter(Issue.category == department_key)
+            norm_cat = normalize_category(department_key)
+            if _is_valid_uuid(department_key):
+                query = query.filter(
+                    or_(
+                        Issue.department_id == department_key,
+                        Issue.category == norm_cat
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        Issue.category == norm_cat,
+                        Issue.category == department_key
+                    )
+                )
 
         active_issues = query.all()
 
@@ -186,7 +240,23 @@ class AnalyticsService:
         )
 
         if department_key:
-            query = query.filter(Issue.category == department_key)
+            norm_cat = normalize_category(department_key)
+            if _is_valid_uuid(department_key):
+                query = query.filter(
+                    or_(
+                        Issue.department_id == department_key,
+                        Issue.category == norm_cat
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        Issue.category == norm_cat,
+                        Issue.category == department_key
+                    )
+                )
+
+
 
         issues = query.all()
 

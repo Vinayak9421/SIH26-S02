@@ -29,7 +29,7 @@ DEMO_USERS = [
         "password": "admin123",
         "role": "department_admin",
         "department_key": "sanitation",
-        "department_id": "dept-sanitation",
+        "department_id": "97a0a5a5-4fae-4ade-8f90-5cd459ef18ed",
         "name": "Sanitation Department Admin",
     },
     {
@@ -37,8 +37,8 @@ DEMO_USERS = [
         "email": "roads@civic.in",
         "password": "admin123",
         "role": "department_admin",
-        "department_key": "roads_infrastructure",
-        "department_id": "dept-roads",
+        "department_key": "roads",
+        "department_id": "9e20b773-ced1-412b-ab37-00f027ea0791",
         "name": "Roads & Infrastructure Admin",
     },
     {
@@ -46,9 +46,45 @@ DEMO_USERS = [
         "email": "water@civic.in",
         "password": "admin123",
         "role": "department_admin",
-        "department_key": "water_supply",
-        "department_id": "dept-water",
+        "department_key": "water",
+        "department_id": "9608500f-75b9-4677-9304-3ed02272449f",
         "name": "Water Supply Admin",
+    },
+    {
+        "id": "dept-admin-streetlights-001",
+        "email": "streetlights@civic.in",
+        "password": "admin123",
+        "role": "department_admin",
+        "department_key": "streetlights",
+        "department_id": "a76f751a-5c45-4a96-a25c-8c566a575265",
+        "name": "Electrical & Street Lighting Admin",
+    },
+    {
+        "id": "dept-admin-health-001",
+        "email": "health@civic.in",
+        "password": "admin123",
+        "role": "department_admin",
+        "department_key": "health",
+        "department_id": "f4b51d3f-4d79-48ff-9d16-18098f188171",
+        "name": "Public Health Admin",
+    },
+    {
+        "id": "dept-admin-traffic-001",
+        "email": "traffic@civic.in",
+        "password": "admin123",
+        "role": "department_admin",
+        "department_key": "traffic",
+        "department_id": "5597eb0b-75ab-4560-8538-05c8f00ba09b",
+        "name": "Traffic & Transport Admin",
+    },
+    {
+        "id": "dept-admin-review-001",
+        "email": "review@civic.in",
+        "password": "admin123",
+        "role": "department_admin",
+        "department_key": "general_review",
+        "department_id": "7004a28a-9f23-4a7c-a597-8c0ae6ebb814",
+        "name": "General Review Admin",
     },
     {
         "id": "citizen-001",
@@ -60,6 +96,7 @@ DEMO_USERS = [
         "name": "Demo Citizen",
     },
 ]
+
 
 
 def _hash_password(password: str) -> str:

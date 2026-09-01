@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 
 from app.dependencies import get_db, get_current_user, require_department_admin
 from app.models.complaint import Complaint
@@ -16,7 +16,8 @@ from app.schemas.complaint import (
 from app.schemas.user import CurrentUser
 from app.services.complaint_service import ComplaintService
 from app.services.issue_service import IssueService
-from app.services.ai.category_templates import CATEGORY_DEPARTMENT_MAPPING
+from app.services.ai.category_templates import CATEGORY_DEPARTMENT_MAPPING, normalize_category
+
 
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
@@ -82,10 +83,32 @@ async def list_department_complaints(
     query = db.query(Complaint)
 
     # If department_admin, scope to their assigned department unless super_admin
-    if current_user.role == "department_admin" and current_user.department_key:
-        query = query.filter(Complaint.ai_category == current_user.department_key)
-    elif category:
-        query = query.filter(Complaint.ai_category == category)
+    dept_key = current_user.department_key if (current_user.role == "department_admin" and current_user.department_key) else category
+    if dept_key:
+        norm_cat = normalize_category(dept_key)
+        try:
+            import uuid as _uuid_mod
+            _uuid_mod.UUID(str(dept_key))
+            is_uuid = True
+        except Exception:
+            is_uuid = False
+
+        if is_uuid:
+            query = query.filter(
+                or_(
+                    Complaint.department_id == dept_key,
+                    Complaint.ai_category == norm_cat
+                )
+            )
+        else:
+            query = query.filter(
+                or_(
+                    Complaint.ai_category == norm_cat,
+                    Complaint.ai_category == dept_key
+                )
+            )
+
+
 
     if status_filter:
         query = query.filter(Complaint.status == status_filter)

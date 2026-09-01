@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 
 from app.models.issue import Issue
 from app.models.complaint import Complaint
@@ -14,7 +14,7 @@ from app.schemas.issue import (
     LinkedComplaintPreview,
     IssueStatusTimelineItem
 )
-from app.services.ai.category_templates import CATEGORY_DEPARTMENT_MAPPING
+from app.services.ai.category_templates import CATEGORY_DEPARTMENT_MAPPING, normalize_category
 import uuid as _uuid_mod
 
 
@@ -27,6 +27,17 @@ def _safe_uuid(val) -> Optional[str]:
         return str(val)
     except (ValueError, AttributeError):
         return None
+
+
+def _is_valid_uuid(val: Optional[str]) -> bool:
+    """Check if string is a valid UUID."""
+    if not val:
+        return False
+    try:
+        _uuid_mod.UUID(str(val))
+        return True
+    except (ValueError, AttributeError):
+        return False
 
 
 class IssueService:
@@ -47,11 +58,27 @@ class IssueService:
         query = db.query(Issue)
 
         if department_key:
-            query = query.filter(Issue.category == department_key)
+            norm_cat = normalize_category(department_key)
+            if _is_valid_uuid(department_key):
+                query = query.filter(
+                    or_(
+                        Issue.department_id == department_key,
+                        Issue.category == norm_cat
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        Issue.category == norm_cat,
+                        Issue.category == department_key
+                    )
+                )
+
         if status_filter:
             query = query.filter(Issue.status == status_filter)
         if priority_filter:
             query = query.filter(Issue.priority == priority_filter)
+
 
         # Ranked by priority score and creation date
         issues = query.order_by(desc(Issue.priority_score), desc(Issue.created_at)).offset(skip).limit(limit).all()
