@@ -7,10 +7,10 @@ from .history import ComplaintStatusHistory, IssueStatusHistory, AuditLog, UserP
 __all__ = [
     "Department",
     "Profile",
+    "UserProfileDetails",
     "Issue",
     "Complaint",
     "ComplaintStatusHistory",
     "IssueStatusHistory",
     "AuditLog",
-    "UserProfileDetails"
 ]

@@ -26,6 +26,7 @@ from .analytics import (
     DepartmentResponse
 )
 from .user import CurrentUser, ProfileResponse
+from .auth import LoginRequest, TokenResponse, RegisterRequest, DemoUserInfo
 
 __all__ = [
     "ComplaintCreate",
@@ -50,5 +51,9 @@ __all__ = [
     "MapIssueMarker",
     "DepartmentResponse",
     "CurrentUser",
-    "ProfileResponse"
+    "ProfileResponse",
+    "LoginRequest",
+    "TokenResponse",
+    "RegisterRequest",
+    "DemoUserInfo"
 ]
