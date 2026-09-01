@@ -1,5 +1,9 @@
-from .ai_service import AIService
-from .embedding_service import EmbeddingService
-from .duplicate_service import DuplicateService
+from .complaint_service import ComplaintService
+from .issue_service import IssueService
+from .analytics_service import AnalyticsService
 
-__all__ = ["AIService", "EmbeddingService", "DuplicateService"]
+__all__ = [
+    "ComplaintService",
+    "IssueService",
+    "AnalyticsService"
+]

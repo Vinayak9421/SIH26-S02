@@ -1,59 +1,50 @@
-import datetime
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    Float,
-    DateTime,
-    ForeignKey,
-    Index
-)
+import uuid
+from datetime import datetime
+from sqlalchemy import Column, String, Text, Integer, Float, Numeric, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
-
 from app.core.database import Base
 
 
 class Complaint(Base):
     """
-    SQLAlchemy Complaint Model corresponding to Section 8.1 of SIH26-S02 specification.
-    Stores citizen grievances, AI classification, priority score, duplicate status, and GIS coordinates.
+    Complaint represents an individual citizen report linking to an underlying Issue.
     """
     __tablename__ = "complaints"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    tracking_id = Column(String(50), unique=True, index=True, nullable=True)  # e.g., GRV-1001
-    description = Column(Text, nullable=False)
-    language = Column(String(20), default="en", nullable=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    citizen_id = Column(String(36), ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    issue_id = Column(String(36), ForeignKey("issues.id", ondelete="SET NULL"), nullable=True, index=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     
-    # AI Classification & Routing
-    category = Column(String(100), index=True, nullable=True)       # e.g., Water Supply, Electricity, Roads
-    department = Column(String(100), index=True, nullable=True)     # e.g., Water Department
-    priority = Column(String(20), index=True, default="MEDIUM")     # CRITICAL, HIGH, MEDIUM, LOW
-    status = Column(String(50), index=True, default="PENDING")      # PENDING, IN_PROGRESS, RESOLVED, REJECTED
+    text = Column(Text, nullable=False)
+    normalized_text = Column(Text, nullable=True)
+    language_hint = Column(String(20), default="en", nullable=True)
+    embedding = Column(Text, nullable=True)  # Serialized 384-dim vector
     
-    # GIS / Location
+    # AI Classification
+    ai_category = Column(String(100), nullable=True, index=True)
+    ai_confidence = Column(Float, nullable=True)
+    
+    # Explainable Priority
+    priority = Column(String(20), nullable=False, default="medium", index=True)  # low, medium, high, critical
+    priority_score = Column(Integer, nullable=False, default=0)
+    priority_reasons = Column(Text, nullable=True)  # Serialized JSON list of reasons
+    
+    # Duplicate Analysis
+    duplicate_state = Column(String(20), nullable=False, default="none", index=True)  # none, possible, linked
+    duplicate_of_issue_id = Column(String(36), ForeignKey("issues.id", ondelete="SET NULL"), nullable=True)
+    
+    # Status & GIS
+    status = Column(String(50), nullable=False, default="pending", index=True)  # pending, in_progress, resolved, rejected
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    location_name = Column(String(255), nullable=True)               # e.g., Sector 5, Ward 12
+    address = Column(Text, nullable=True)
     
-    # AI Metadata & Summaries
-    ai_confidence = Column(Float, nullable=True)                     # e.g., 0.94
-    summary = Column(Text, nullable=True)
-    
-    # Duplicate Detection & Semantic Links
-    duplicate_of = Column(Integer, ForeignKey("complaints.id", ondelete="SET NULL"), nullable=True)
-    similarity_score = Column(Float, nullable=True)                  # e.g., 0.92
-    
-    # Embedding vector serialization (stored as JSON string or pgvector)
-    embedding_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    # Self-referencing relationship for duplicate complaints
-    parent_complaint = relationship("Complaint", remote_side=[id], backref="duplicate_complaints")
-
-    def __repr__(self):
-        return f"<Complaint(id={self.id}, tracking_id='{self.tracking_id}', category='{self.category}', priority='{self.priority}')>"
+    # Relationships
+    citizen = relationship("Profile", back_populates="complaints")
+    issue = relationship("Issue", back_populates="complaints", foreign_keys=[issue_id])
+    department = relationship("Department", back_populates="complaints")
+    status_history = relationship("ComplaintStatusHistory", back_populates="complaint", cascade="all, delete-orphan")

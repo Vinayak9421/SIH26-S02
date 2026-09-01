@@ -1,14 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-from app.core.config import settings
+from app.config import settings
 from app.core.database import init_db, check_db_connection
-from app.api.v1.api_router import api_router
+from app.routers import api_v1_router, health_router
+from app.services.ai.analyze import get_ai_pipeline
 
-# Setup logger
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -19,36 +18,40 @@ logger = logging.getLogger("main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Application lifespan events.
-    Initializes database schema and validates connection on startup.
+    Application lifespan manager.
+    Initializes database schema and pre-warms AI embedding model on startup.
     """
-    logger.info(f"Starting {settings.PROJECT_NAME}...")
-    
-    # Initialize DB tables
+    logger.info(f"Starting {settings.PROJECT_NAME} ({settings.ENVIRONMENT})...")
+
+    # 1. Initialize DB Schema
     init_db()
-    
-    # Check DB connectivity
-    is_healthy, msg = check_db_connection()
-    if is_healthy:
-        logger.info(f"Database connection status: OK - {msg}")
-    else:
-        logger.warning(f"Database connection status: ATTENTION - {msg}")
-        
+
+    # 2. Check Database Connectivity
+    is_healthy, db_msg = check_db_connection()
+    logger.info(f"Database status: {'OK' if is_healthy else 'WARNING'} - {db_msg}")
+
+    # 3. Pre-warm Multilingual SentenceTransformer Pipeline
+    logger.info("Initializing AI Multilingual Intelligence Pipeline...")
+    try:
+        get_ai_pipeline()
+        logger.info("AI Pipeline pre-warmed and ready.")
+    except Exception as e:
+        logger.warning(f"AI Pipeline pre-warm encountered notice: {e}")
+
     yield
-    logger.info("Shutting down application...")
+    logger.info(f"Shutting down {settings.PROJECT_NAME}...")
 
 
-# FastAPI Application instance
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Backend API for SIH26-S02 Citizen Grievance Intelligence Platform",
+    description="Backend API for CivicIssue AI: Citizen Grievance Classification, Prioritization and Duplicate Detection",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
 )
 
-# CORS Middleware setup
+# Configure CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -57,10 +60,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include Root Health & API Routers
+app.include_router(health_router)
+app.include_router(api_v1_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/", tags=["Root"])
 def root():
-    """Root endpoint providing API information and documentation links"""
     return {
         "project": settings.PROJECT_NAME,
         "version": "1.0.0",
@@ -68,34 +74,6 @@ def root():
         "health_check": "/health",
         "api_v1_prefix": settings.API_V1_STR
     }
-
-
-@app.get("/health", tags=["Health"])
-def health_check():
-    """
-    Service health check endpoint verifying server status and database connectivity.
-    """
-    db_healthy, db_message = check_db_connection()
-    
-    status_str = "healthy" if db_healthy else "degraded"
-    status_code = status.HTTP_200_OK if db_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
-
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "status": status_str,
-            "server": "running",
-            "database": {
-                "connected": db_healthy,
-                "message": db_message,
-                "target_url": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "configured"
-            }
-        }
-    )
-
-
-# Include API v1 routes
-app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 if __name__ == "__main__":

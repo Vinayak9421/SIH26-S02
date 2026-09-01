@@ -1,0 +1,105 @@
+from dataclasses import dataclass
+from typing import List
+
+SAFETY_TERMS = [
+    "fire", "sparking", "electric shock", "exposed wire", "live wire",
+    "accident", "collapse", "gas leak", "dangerous", "hazard", "open wire",
+    "आग", "करंट", "खुला तार", "दुर्घटना", "खतरा"
+]
+
+EMERGENCY_TERMS = [
+    "emergency", "immediately", "urgent", "immediate", "jaldi",
+    "तुरंत", "आपातकाल", "जल्दी"
+]
+
+HEALTH_TERMS = [
+    "mosquito", "mosquitoes", "disease", "sewage", "contaminated", "stagnant water",
+    "machhar", "ganda paani", "मच्छर", "बीमारी", "गंदा पानी", "dengue", "malaria"
+]
+
+SENSITIVE_LOCATION_TERMS = [
+    "school", "hospital", "junction", "market", "children",
+    "school ke paas", "hospital ke paas", "स्कूल", "अस्पताल", "मार्केट"
+]
+
+DURATION_TERMS = [
+    "since", "days", "weeks", "three days", "repeatedly", "teen din",
+    "din se", "hafton se", "दिनों से", "कई दिन", "3 days"
+]
+
+WIDESPREAD_TERMS = [
+    "entire", "whole", "all residents", "many people", "whole lane",
+    "poori gali", "poora ward", "पूरा", "सभी", "colony", "society"
+]
+
+EMERGENCY_OVERRIDE_TERMS = [
+    "fire", "electric shock", "gas leak", "collapse", "आग", "करंट", "गैस रिसाव"
+]
+
+
+@dataclass
+class PriorityResult:
+    level: str
+    score: int
+    reasons: List[str]
+
+
+def contains_any(text: str, terms: List[str]) -> bool:
+    normalized = text.lower()
+    return any(term.lower() in normalized for term in terms)
+
+
+def compute_priority(text: str, existing_issue_count: int = 0) -> PriorityResult:
+    """
+    Computes explainable priority score and level based on transparent rule set.
+    """
+    score = 0
+    reasons = []
+
+    if contains_any(text, SAFETY_TERMS):
+        score += 45
+        reasons.append("Safety hazard detected (+45)")
+
+    if contains_any(text, EMERGENCY_TERMS):
+        score += 20
+        reasons.append("Urgency phrase detected (+20)")
+
+    if contains_any(text, HEALTH_TERMS):
+        score += 20
+        reasons.append("Public-health risk detected (+20)")
+
+    if contains_any(text, SENSITIVE_LOCATION_TERMS):
+        score += 15
+        reasons.append("Sensitive public location mentioned (+15)")
+
+    if contains_any(text, DURATION_TERMS):
+        score += 10
+        reasons.append("Persistent duration mentioned (+10)")
+
+    if contains_any(text, WIDESPREAD_TERMS):
+        score += 10
+        reasons.append("Widespread impact mentioned (+10)")
+
+    if existing_issue_count > 0:
+        impact_bonus = min(existing_issue_count * 2, 20)
+        score += impact_bonus
+        reasons.append(f"Existing citizen impact: {existing_issue_count} linked reports (+{impact_bonus})")
+
+    # Critical override for life-safety triggers
+    if contains_any(text, EMERGENCY_OVERRIDE_TERMS):
+        return PriorityResult("critical", max(score, 75), reasons + ["Emergency safety override applied"])
+
+    if score >= 71:
+        level = "critical"
+    elif score >= 46:
+        level = "high"
+    elif score >= 21:
+        level = "medium"
+    else:
+        level = "low"
+
+    return PriorityResult(
+        level=level,
+        score=score,
+        reasons=reasons or ["Standard non-elevated civic grievance"]
+    )
