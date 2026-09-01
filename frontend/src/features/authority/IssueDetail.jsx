@@ -3,38 +3,84 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AuthorityLayout } from '../../components/layout'
 import { PriorityBadge, StatusBadge, CategoryBadge, AiTag } from '../../components/ui'
+import { useIssueDetail, useUpdateIssue, useResolveIssue } from '../../hooks/useApi'
+import { toast } from 'sonner'
 
-const issueData = {
-  id: 'ISS-441',
-  title: 'Missed Garbage Collection Ward 12',
-  category: 'Sanitation',
-  priority: 'Critical',
-  status: 'Open',
-  department: 'Waste Management',
-  location: 'Ward 12, Delhi - 110001',
-  aiConf: 96,
-  aiReasoning: ['12+ linked complaints in same area', 'Reported health risk keywords detected', '3+ days with no resolution', 'High density residential zone', 'Previous similar issue resolved by Waste Mgmt'],
-  linkedComplaints: [
-    { id: '#CID-8821', citizen: 'Arjun Mehta', date: 'Oct 24', desc: 'Ward 12 mein school ke paas teen din se kachra nahi uthaya gaya' },
-    { id: '#CID-8834', citizen: 'Priya Sharma', date: 'Oct 24', desc: 'Garbage overflowing in our lane for 3 days' },
-    { id: '#CID-8851', citizen: 'Mohammed Ali', date: 'Oct 25', desc: 'Strong smell from garbage bin near park entrance' },
-    { id: '#CID-8860', citizen: 'Sita Devi', date: 'Oct 25', desc: 'Stray dogs attracting due to uncollected garbage' },
-  ],
-  activityLog: [
-    { type: 'ai', text: 'Complaint #CID-8821 auto-linked by AI (conf: 96%)', time: 'Oct 24, 09:12' },
-    { type: 'ai', text: 'Priority escalated to Critical: health risk detected', time: 'Oct 24, 09:15' },
-    { type: 'system', text: 'Routed to Waste Management Department', time: 'Oct 24, 09:15' },
-    { type: 'human', text: 'Department Admin acknowledged issue', time: 'Oct 25, 11:30' },
-    { type: 'ai', text: '3 more complaints auto-linked overnight', time: 'Oct 25, 08:00' },
-  ]
-}
+const STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'resolved', label: 'Resolved' },
+]
 
 export default function IssueDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const issue = issueData
-  const [status, setStatus] = useState(issue.status)
+
+  const { data: issue, isLoading, error } = useIssueDetail(id)
+  const updateIssue = useUpdateIssue()
+  const resolveIssue = useResolveIssue()
+
+  const [pendingStatus, setPendingStatus] = useState(null)
   const [note, setNote] = useState('')
+  const [resolving, setResolving] = useState(false)
+
+  const handleStatusUpdate = async () => {
+    if (!pendingStatus) return
+    try {
+      await updateIssue.mutateAsync({ id, status: pendingStatus, note: note || undefined })
+      toast.success(`Issue status updated to "${pendingStatus.replace('_', ' ')}"`)
+      setNote('')
+      setPendingStatus(null)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update status')
+    }
+  }
+
+  const handleResolve = async () => {
+    setResolving(true)
+    try {
+      const result = await resolveIssue.mutateAsync({ id, note: note || undefined })
+      toast.success(`Issue resolved! ${result.linked_complaints_resolved_count} complaints auto-resolved.`)
+      navigate('/authority/issues')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to resolve issue')
+    } finally {
+      setResolving(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <AuthorityLayout>
+        <div className="space-y-md animate-pulse max-w-5xl">
+          <div className="h-8 bg-surface-container rounded-lg w-48" />
+          <div className="h-12 bg-surface-container rounded-lg" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-md">
+            <div className="lg:col-span-2 space-y-md">
+              <div className="h-48 bg-surface-container rounded-xl" />
+              <div className="h-64 bg-surface-container rounded-xl" />
+            </div>
+            <div className="h-64 bg-surface-container rounded-xl" />
+          </div>
+        </div>
+      </AuthorityLayout>
+    )
+  }
+
+  if (error || !issue) {
+    return (
+      <AuthorityLayout>
+        <div className="text-center py-xl">
+          <span className="material-symbols-outlined block mx-auto text-on-surface-variant" style={{ fontSize: '48px' }}>error</span>
+          <p className="text-body-lg text-on-surface-variant mt-sm">Issue not found or failed to load.</p>
+          <button onClick={() => navigate('/authority/issues')} className="mt-md text-primary-container hover:underline">← Back to Queue</button>
+        </div>
+      </AuthorityLayout>
+    )
+  }
+
+  const currentStatus = pendingStatus || issue.status
+  const formattedStatus = (s) => s?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 
   return (
     <AuthorityLayout>
@@ -48,30 +94,53 @@ export default function IssueDetail() {
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-md">
             <div>
               <div className="flex items-center gap-sm mb-xs">
-                <span className="font-mono text-label-md text-on-surface-variant font-semibold">{issue.id}</span>
-                <PriorityBadge priority={issue.priority} />
+                <span className="font-mono text-label-md text-on-surface-variant font-semibold">#{issue.id?.slice(0, 8)}</span>
+                <PriorityBadge priority={formattedStatus(issue.priority)} />
               </div>
               <h1 className="text-headline-lg text-on-surface font-semibold">{issue.title}</h1>
               <div className="flex flex-wrap gap-sm mt-sm">
-                <CategoryBadge category={issue.category} />
-                <AiTag label={`${issue.department}`} confidence={issue.aiConf} />
-                <span className="text-body-sm text-on-surface-variant flex items-center gap-xs">
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>location_on</span>
-                  {issue.location}
-                </span>
+                {issue.category && <CategoryBadge category={issue.category.replace(/_/g, ' ')} />}
+                {issue.department_name && <AiTag label={issue.department_name} confidence={null} />}
+                {issue.address && (
+                  <span className="text-body-sm text-on-surface-variant flex items-center gap-xs">
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>location_on</span>
+                    {issue.address}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-start md:items-end gap-sm shrink-0">
-              <StatusBadge status={status} />
-              <select
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                className="border border-primary-container text-primary-container rounded-md px-sm py-[6px] text-label-md font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-primary-container"
-              >
-                <option>Open</option>
-                <option>In Progress</option>
-                <option>Resolved</option>
-              </select>
+              <StatusBadge status={formattedStatus(currentStatus)} />
+              <div className="flex items-center gap-sm">
+                <select
+                  value={pendingStatus || issue.status}
+                  onChange={e => setPendingStatus(e.target.value)}
+                  className="border border-primary-container text-primary-container rounded-md px-sm py-[6px] text-label-md font-semibold bg-white focus:outline-none"
+                >
+                  {STATUS_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                {pendingStatus && pendingStatus !== issue.status && (
+                  <button
+                    onClick={handleStatusUpdate}
+                    disabled={updateIssue.isPending}
+                    className="bg-primary-container text-on-primary text-label-md font-semibold px-sm py-[6px] rounded-md hover:shadow-md transition-all disabled:opacity-50"
+                  >
+                    {updateIssue.isPending ? '…' : 'Save'}
+                  </button>
+                )}
+              </div>
+              {issue.status !== 'resolved' && (
+                <button
+                  onClick={handleResolve}
+                  disabled={resolving}
+                  className="bg-green-600 text-white text-label-md font-semibold px-md py-sm rounded-md hover:bg-green-700 transition-all disabled:opacity-50 flex items-center gap-xs"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check_circle</span>
+                  {resolving ? 'Resolving…' : 'Resolve Issue'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -80,29 +149,19 @@ export default function IssueDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-md">
           {/* Left col */}
           <div className="lg:col-span-2 space-y-md">
-            {/* AI Analysis */}
-            <div className="glass-card rounded-xl p-md space-y-sm">
-              <h2 className="text-headline-md text-on-surface font-semibold flex items-center gap-sm">
-                <span className="material-symbols-outlined text-[#7c4dff]" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-                AI Analysis
-              </h2>
-              <div className="bg-purple-50 border border-purple-100 rounded-lg p-sm">
-                <div className="flex items-center justify-between mb-sm">
-                  <span className="text-body-md text-on-surface font-semibold">Recommended Department</span>
-                  <span className="text-headline-md text-[#7c4dff] font-bold">{issue.aiConf}%</span>
-                </div>
-                <p className="text-body-lg text-on-surface font-bold">{issue.department}</p>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-sm">
+              <div className="glass-card rounded-xl p-sm text-center">
+                <p className="text-headline-xl font-bold text-primary-container">{issue.complaint_count}</p>
+                <p className="text-body-sm text-on-surface-variant">Linked Complaints</p>
               </div>
-              <div>
-                <p className="text-label-md text-on-surface-variant font-semibold mb-sm">Why this classification?</p>
-                <ul className="space-y-[6px]">
-                  {issue.aiReasoning.map(r => (
-                    <li key={r} className="flex items-start gap-sm text-body-sm text-on-surface">
-                      <span className="material-symbols-outlined text-[#7c4dff] shrink-0 mt-[1px]" style={{ fontSize: '14px', fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                      {r}
-                    </li>
-                  ))}
-                </ul>
+              <div className="glass-card rounded-xl p-sm text-center">
+                <p className="text-headline-xl font-bold text-on-surface">{issue.priority_score}</p>
+                <p className="text-body-sm text-on-surface-variant">Priority Score</p>
+              </div>
+              <div className="glass-card rounded-xl p-sm text-center">
+                <p className="text-headline-xl font-bold text-on-surface capitalize">{issue.status?.replace(/_/g, ' ')}</p>
+                <p className="text-body-sm text-on-surface-variant">Status</p>
               </div>
             </div>
 
@@ -110,22 +169,30 @@ export default function IssueDetail() {
             <div className="glass-card rounded-xl p-md space-y-sm">
               <h2 className="text-headline-md text-on-surface font-semibold">
                 Linked Complaints
-                <span className="ml-sm bg-primary/10 text-primary text-label-md font-bold px-sm py-[2px] rounded-full">{issue.linkedComplaints.length}</span>
+                <span className="ml-sm bg-primary/10 text-primary text-label-md font-bold px-sm py-[2px] rounded-full">{issue.linked_complaints?.length || 0}</span>
               </h2>
               <div className="space-y-sm">
-                {issue.linkedComplaints.map(c => (
+                {(issue.linked_complaints || []).map(c => (
                   <div key={c.id} className="flex items-start gap-sm p-sm bg-surface-container-low rounded-lg border border-outline-variant/20">
-                    <span className="font-mono text-label-md text-primary-container font-semibold shrink-0">{c.id}</span>
+                    <span className="font-mono text-label-md text-primary-container font-semibold shrink-0">#{c.id?.slice(0, 8)}</span>
                     <div className="flex-1">
-                      <p className="text-body-sm text-on-surface-variant">{c.citizen} · {c.date}</p>
-                      <p className="text-body-md text-on-surface italic">"{c.desc}"</p>
+                      <div className="flex items-center gap-sm">
+                        <PriorityBadge priority={formattedStatus(c.priority)} />
+                        <StatusBadge status={formattedStatus(c.status)} />
+                        <span className="text-body-sm text-on-surface-variant">{new Date(c.created_at).toLocaleDateString('en-IN')}</span>
+                      </div>
+                      <p className="text-body-md text-on-surface italic mt-xs">"{c.text?.slice(0, 120)}{c.text?.length > 120 ? '…' : ''}"</p>
+                      {c.address && <p className="text-body-sm text-on-surface-variant mt-xs">📍 {c.address}</p>}
                     </div>
                   </div>
                 ))}
+                {(!issue.linked_complaints || issue.linked_complaints.length === 0) && (
+                  <p className="text-body-sm text-on-surface-variant">No linked complaints yet.</p>
+                )}
               </div>
             </div>
 
-            {/* Add note */}
+            {/* Add note / update */}
             <div className="glass-card rounded-xl p-md space-y-sm">
               <h2 className="text-headline-md text-on-surface font-semibold">Add Internal Note</h2>
               <textarea
@@ -135,47 +202,66 @@ export default function IssueDetail() {
                 onChange={e => setNote(e.target.value)}
                 className="w-full rounded-md border border-outline-variant bg-white px-md py-sm text-body-md text-on-surface resize-none focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 placeholder:text-outline"
               />
-              <button className="bg-primary-container text-on-primary text-label-md font-semibold px-md py-sm rounded-md hover:shadow-md transition-all">
-                Post Note
+              <button
+                onClick={handleStatusUpdate}
+                disabled={!note || updateIssue.isPending}
+                className="bg-primary-container text-on-primary text-label-md font-semibold px-md py-sm rounded-md hover:shadow-md transition-all disabled:opacity-50"
+              >
+                {updateIssue.isPending ? 'Saving…' : 'Post Note & Save'}
               </button>
             </div>
           </div>
 
           {/* Right col */}
           <div className="space-y-md">
-            {/* Mini Map */}
-            <div className="glass-card rounded-xl overflow-hidden">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 h-40 flex items-center justify-center relative">
-                <div className="absolute inset-0 opacity-20" style={{
-                  backgroundImage: 'repeating-linear-gradient(0deg, #93c5fd 0, #93c5fd 1px, transparent 0, transparent 30px), repeating-linear-gradient(90deg, #93c5fd 0, #93c5fd 1px, transparent 0, transparent 30px)',
-                  backgroundSize: '30px 30px'
-                }} />
-                <div className="z-10 text-center">
-                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '40px', fontVariationSettings: "'FILL' 1" }}>location_on</span>
-                  <p className="text-body-sm text-primary font-medium">Ward 12, Delhi</p>
-                </div>
+            {/* Issue summary */}
+            {issue.summary && (
+              <div className="glass-card rounded-xl p-md">
+                <h3 className="text-headline-md text-on-surface font-semibold mb-sm flex items-center gap-sm">
+                  <span className="material-symbols-outlined text-[#7c4dff]" style={{ fontSize: '18px', fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                  AI Summary
+                </h3>
+                <p className="text-body-md text-on-surface">{issue.summary}</p>
               </div>
-              <div className="px-md py-sm text-body-sm text-on-surface-variant">{issue.location}</div>
-            </div>
+            )}
 
-            {/* Activity Log */}
+            {/* Activity / Status Timeline */}
             <div className="glass-card rounded-xl p-md">
-              <h3 className="text-headline-md text-on-surface font-semibold mb-md">Activity Log</h3>
+              <h3 className="text-headline-md text-on-surface font-semibold mb-md">Status Timeline</h3>
               <div className="space-y-sm">
-                {issue.activityLog.map((log, i) => (
+                {(issue.timeline || []).map((t, i) => (
                   <div key={i} className="flex items-start gap-sm border-b border-outline-variant/20 pb-sm last:border-0">
-                    <span className={`material-symbols-outlined shrink-0 mt-[1px] ${log.type === 'ai' ? 'text-[#7c4dff]' : log.type === 'human' ? 'text-primary-container' : 'text-on-surface-variant'}`}
-                      style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>
-                      {log.type === 'ai' ? 'auto_awesome' : log.type === 'human' ? 'person' : 'settings'}
+                    <span className="material-symbols-outlined text-primary-container shrink-0" style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>
+                      history
                     </span>
                     <div>
-                      <p className="text-body-sm text-on-surface">{log.text}</p>
-                      <p className="text-body-sm text-on-surface-variant">{log.time}</p>
+                      <p className="text-body-sm text-on-surface font-medium capitalize">{t.status?.replace(/_/g, ' ')}</p>
+                      {t.note && <p className="text-body-sm text-on-surface-variant">{t.note}</p>}
+                      <p className="text-body-sm text-on-surface-variant">{new Date(t.created_at).toLocaleString('en-IN')}</p>
                     </div>
                   </div>
                 ))}
+                {(!issue.timeline || issue.timeline.length === 0) && (
+                  <p className="text-body-sm text-on-surface-variant">No status changes yet.</p>
+                )}
               </div>
             </div>
+
+            {/* Location */}
+            {issue.address && (
+              <div className="glass-card rounded-xl p-md">
+                <h3 className="text-headline-md text-on-surface font-semibold mb-sm">Location</h3>
+                <p className="text-body-md text-on-surface flex items-center gap-xs">
+                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '18px', fontVariationSettings: "'FILL' 1" }}>location_on</span>
+                  {issue.address}
+                </p>
+                {issue.latitude && issue.longitude && (
+                  <p className="text-body-sm text-on-surface-variant mt-xs">
+                    {issue.latitude.toFixed(4)}°N, {issue.longitude.toFixed(4)}°E
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

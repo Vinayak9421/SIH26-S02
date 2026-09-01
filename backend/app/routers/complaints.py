@@ -10,7 +10,8 @@ from app.schemas.complaint import (
     ComplaintSubmitResponse,
     ComplaintDetailResponse,
     ComplaintListItem,
-    ComplaintStatusUpdate
+    ComplaintStatusUpdate,
+    ComplaintRatingCreate
 )
 from app.schemas.user import CurrentUser
 from app.services.complaint_service import ComplaintService
@@ -44,7 +45,7 @@ async def get_my_complaints(
     """
     Returns citizen's own submitted complaints with status and linked issue.
     """
-    return ComplaintService.get_citizen_complaints(db=db, citizen_id=current_user.id)
+    return ComplaintService.get_citizen_complaints(db=db, user_id=current_user.id)
 
 
 @router.get("/{complaint_id}", response_model=ComplaintDetailResponse)
@@ -158,3 +159,29 @@ async def unlink_complaint_from_issue(
             detail=f"Complaint '{complaint_id}' not found"
         )
     return ComplaintService.get_complaint_detail(db=db, complaint_id=complaint_id)
+
+
+@router.post("/{complaint_id}/rate", response_model=ComplaintDetailResponse)
+async def rate_complaint(
+    complaint_id: str,
+    payload: ComplaintRatingCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    Citizen satisfaction rating (1-5 stars) and feedback for resolved complaints.
+    """
+    updated = ComplaintService.rate_complaint(
+        db=db,
+        complaint_id=complaint_id,
+        citizen_id=current_user.id,  # rate_complaint internally uses user_id column
+        rating=payload.rating,
+        feedback=payload.feedback
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Complaint '{complaint_id}' not found or not owned by current user"
+        )
+    return updated
+

@@ -2,7 +2,7 @@ from .department import Department
 from .profile import Profile
 from .issue import Issue
 from .complaint import Complaint
-from .history import ComplaintStatusHistory, IssueStatusHistory, AuditLog
+from .history import ComplaintStatusHistory, IssueStatusHistory, AuditLog, UserProfileDetails
 
 __all__ = [
     "Department",
@@ -11,5 +11,6 @@ __all__ = [
     "Complaint",
     "ComplaintStatusHistory",
     "IssueStatusHistory",
-    "AuditLog"
+    "AuditLog",
+    "UserProfileDetails"
 ]

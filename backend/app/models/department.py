@@ -13,7 +13,8 @@ class Department(Base):
     category_key = Column(Text, nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     profiles = relationship("Profile", back_populates="department")

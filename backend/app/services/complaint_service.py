@@ -24,8 +24,21 @@ from app.services.ai.analyze import analyze_complaint
 from app.services.ai.duplicate_service import IssueCandidate
 from app.services.ai.geo_service import get_hotspot_key
 from app.services.ai.category_templates import CATEGORY_DEPARTMENT_MAPPING
+import uuid as _uuid_mod
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _safe_uuid(val) -> Optional[str]:
+    """Return val as str if it is a valid UUID, else None. Prevents demo admin string IDs from crashing uuid columns."""
+    if val is None:
+        return None
+    try:
+        _uuid_mod.UUID(str(val))
+        return str(val)
+    except (ValueError, AttributeError):
+        return None
+
 
 PRIORITY_RANK = {
     "low": 1,
@@ -144,7 +157,7 @@ class ComplaintService:
             hotspot_key = get_hotspot_key(payload.latitude, payload.longitude)
 
             target_issue = Issue(
-                department_id=department_id,
+                department_id=str(department_id),
                 title=issue_title,
                 summary=payload.text[:200],
                 category=category,
@@ -163,7 +176,7 @@ class ComplaintService:
 
             # Add initial issue history
             db.add(IssueStatusHistory(
-                issue_id=target_issue.id,
+                issue_id=str(target_issue.id),
                 status="open",
                 note="New civic issue created from citizen report"
             ))
@@ -175,9 +188,9 @@ class ComplaintService:
 
         # 5. Create Complaint Record
         new_complaint = Complaint(
-            citizen_id=current_user.id,
-            issue_id=target_issue.id,
-            department_id=department_id,
+            user_id=str(current_user.id),
+            issue_id=str(target_issue.id),
+            department_id=str(department_id) if department_id else None,
             text=payload.text,
             normalized_text=ai_res["normalized_text"],
             embedding=json.dumps(ai_res["embedding"]),
@@ -185,9 +198,9 @@ class ComplaintService:
             ai_confidence=ai_res["confidence"],
             priority=ai_res["priority"],
             priority_score=ai_res["priority_score"],
-            priority_reasons=json.dumps(ai_res["priority_reasons"]),
+            priority_reasons=json.dumps(ai_res["priority_reasons"]),  # json string -> jsonb cast by PostgreSQL
             duplicate_state=duplicate_state,
-            duplicate_of_issue_id=matched_issue_id if duplicate_state == "linked" else None,
+            duplicate_of_issue_id=str(matched_issue_id) if matched_issue_id and duplicate_state == "linked" else None,
             status="pending",
             latitude=payload.latitude,
             longitude=payload.longitude,
@@ -198,7 +211,7 @@ class ComplaintService:
 
         # 6. Create Complaint Status History
         db.add(ComplaintStatusHistory(
-            complaint_id=new_complaint.id,
+            complaint_id=str(new_complaint.id),
             status="pending",
             note="Complaint submitted and AI analysis completed"
         ))
@@ -231,9 +244,9 @@ class ComplaintService:
         )
 
     @classmethod
-    def get_citizen_complaints(cls, db: Session, citizen_id: str) -> List[ComplaintListItem]:
-        """Fetch citizen's own complaints"""
-        complaints = db.query(Complaint).filter(Complaint.citizen_id == citizen_id).order_by(desc(Complaint.created_at)).all()
+    def get_citizen_complaints(cls, db: Session, user_id: str) -> List[ComplaintListItem]:
+        """Get all complaints for a citizen (uses user_id column in NeonDB)."""
+        complaints = db.query(Complaint).filter(Complaint.user_id == user_id).order_by(desc(Complaint.created_at)).all()
         items = []
         for c in complaints:
             dept_name = c.department.name if c.department else (CATEGORY_DEPARTMENT_MAPPING.get(c.ai_category, c.ai_category) if c.ai_category else None)
@@ -249,6 +262,7 @@ class ComplaintService:
                     duplicate_state=c.duplicate_state,
                     issue_id=str(c.issue_id) if c.issue_id else None,
                     address=c.address,
+                    satisfaction_rating=c.satisfaction_rating,
                     created_at=c.created_at
                 )
             )
@@ -263,10 +277,15 @@ class ComplaintService:
 
         reasons = []
         if complaint.priority_reasons:
-            try:
-                reasons = json.loads(complaint.priority_reasons)
-            except Exception:
-                reasons = [complaint.priority_reasons]
+            if isinstance(complaint.priority_reasons, list):
+                # NeonDB jsonb — already deserialized by SQLAlchemy/psycopg2
+                reasons = [str(r) for r in complaint.priority_reasons]
+            elif isinstance(complaint.priority_reasons, str):
+                try:
+                    parsed = json.loads(complaint.priority_reasons)
+                    reasons = parsed if isinstance(parsed, list) else [str(parsed)]
+                except Exception:
+                    reasons = [complaint.priority_reasons]
 
         timeline_items = []
         for hist in complaint.status_history:
@@ -274,7 +293,7 @@ class ComplaintService:
                 ComplaintTimelineItem(
                     status=hist.status,
                     note=hist.note,
-                    changed_by=hist.changed_by,
+                    changed_by=str(hist.changed_by) if hist.changed_by else None,
                     created_at=hist.created_at
                 )
             )
@@ -294,6 +313,9 @@ class ComplaintService:
             address=complaint.address,
             latitude=complaint.latitude,
             longitude=complaint.longitude,
+            satisfaction_rating=complaint.satisfaction_rating,
+            satisfaction_feedback=complaint.satisfaction_feedback,
+            rated_at=complaint.rated_at,
             created_at=complaint.created_at,
             updated_at=complaint.updated_at,
             issue_id=str(complaint.issue.id) if complaint.issue else None,
@@ -301,6 +323,39 @@ class ComplaintService:
             issue_status=complaint.issue.status if complaint.issue else None,
             timeline=timeline_items
         )
+
+    @classmethod
+    def rate_complaint(
+        cls,
+        db: Session,
+        complaint_id: str,
+        citizen_id: str,
+        rating: int,
+        feedback: Optional[str] = None
+    ) -> Optional[ComplaintDetailResponse]:
+        """Citizen satisfaction rating for resolved complaints"""
+        complaint = db.query(Complaint).filter(
+            Complaint.id == complaint_id,
+            Complaint.user_id == citizen_id
+        ).first()
+        if not complaint:
+            return None
+
+        complaint.satisfaction_rating = rating
+        complaint.satisfaction_feedback = feedback
+        complaint.rated_at = datetime.utcnow()
+        complaint.updated_at = datetime.utcnow()
+
+        db.add(ComplaintStatusHistory(
+            complaint_id=str(complaint.id),
+            status=complaint.status,
+            note=f"Citizen rated resolution {rating}/5 stars" + (f": {feedback}" if feedback else ""),
+            changed_by=_safe_uuid(citizen_id)
+        ))
+
+        db.commit()
+        db.refresh(complaint)
+        return cls.get_complaint_detail(db, complaint_id)
 
     @classmethod
     def update_complaint_status(
@@ -320,10 +375,10 @@ class ComplaintService:
         complaint.updated_at = datetime.utcnow()
 
         db.add(ComplaintStatusHistory(
-            complaint_id=complaint.id,
+            complaint_id=str(complaint.id),
             status=new_status,
             note=note or f"Status updated to {new_status}",
-            changed_by=changed_by_id
+            changed_by=_safe_uuid(changed_by_id)
         ))
 
         db.commit()

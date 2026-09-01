@@ -1,60 +1,86 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AuthorityLayout } from '../../components/layout'
-import { KpiCard, AiTag, PriorityBadge, StatusBadge } from '../../components/ui'
+import { KpiCard, PriorityBadge, StatusBadge } from '../../components/ui'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+import { useAnalyticsSummary, useIssues, useComplaints } from '../../hooks/useApi'
+import { useAuthStore } from '../../store/authStore'
 
-const kpis = [
-  { title: 'Open Issues',      value: '142', trend: '+8 today',  trendUp: false, icon: 'folder_open',     color: 'blue'   },
-  { title: 'Critical',         value: '12',  trend: '-2 today',  trendUp: true,  icon: 'priority_high',   color: 'red'    },
-  { title: 'High Priority',    value: '48',  trend: '+3 today',  trendUp: false, icon: 'report',          color: 'orange' },
-  { title: 'Resolved Today',   value: '24',  trend: '+6 today',  trendUp: true,  icon: 'check_circle',    color: 'green'  },
-]
+const PRIORITY_COLORS = {
+  critical: '#ba1a1a',
+  high: '#e65100',
+  medium: '#1565c0',
+  low: '#5c5f60',
+}
 
-const criticalIssues = [
-  { id: 'ISS-441', title: 'Missed Garbage Collection Ward 12', complaints: 24, priority: 'Critical', dept: 'Waste Management', location: 'Ward 12, Delhi', status: 'Open' },
-  { id: 'ISS-389', title: 'Broken Sewer Line Sector 7', complaints: 18, priority: 'Critical', dept: 'Water Supply', location: 'Sector 7, Delhi', status: 'Open' },
-  { id: 'ISS-402', title: 'Multiple Potholes on MG Road', complaints: 31, priority: 'High', dept: 'Roads', location: 'MG Road, Delhi', status: 'In Progress' },
-  { id: 'ISS-417', title: 'Street Lights Outage Ward 5', complaints: 15, priority: 'High', dept: 'Electricity', location: 'Ward 5, Delhi', status: 'Open' },
-  { id: 'ISS-455', title: 'Overflowing Drain near Park', complaints: 9, priority: 'Medium', dept: 'Drainage', location: 'Central Park', status: 'In Progress' },
-]
+const STATUS_COLORS = {
+  open: '#ba1a1a',
+  in_progress: '#e65100',
+  resolved: '#2e7d32',
+}
 
-const deptData = [
-  { name: 'Waste', issues: 34 },
-  { name: 'Roads', issues: 28 },
-  { name: 'Water', issues: 22 },
-  { name: 'Electricity', issues: 18 },
-  { name: 'Drainage', issues: 14 },
-]
-
-const statusData = [
-  { name: 'Open', value: 58, color: '#ba1a1a' },
-  { name: 'In Progress', value: 29, color: '#e65100' },
-  { name: 'Resolved', value: 13, color: '#2e7d32' },
-]
-
-const recentAIDecisions = [
-  { id: '#4521', text: "auto-linked to Issue 'Missed collection, Ward 12'", time: '2 min ago' },
-  { id: '#4498', text: "prioritized as Critical due to health risk near school", time: '15 min ago' },
-  { id: '#4476', text: "merged with Issue 'Pothole cluster, MG Road'", time: '1 hr ago' },
-  { id: '#4451', text: "routed to Water Supply Dept (confidence: 97%)", time: '2 hr ago' },
-]
+function LoadingSkeleton({ rows = 4 }) {
+  return (
+    <div className="animate-pulse space-y-sm">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="h-10 bg-surface-container rounded-lg" />
+      ))}
+    </div>
+  )
+}
 
 export default function AuthorityDashboard() {
   const navigate = useNavigate()
+  const { departmentKey, role } = useAuthStore()
+  const scopedDept = role === 'department_admin' ? departmentKey : null
+
+  const { data: analytics, isLoading: analyticsLoading } = useAnalyticsSummary(scopedDept)
+  const { data: criticalIssues, isLoading: issuesLoading } = useIssues({
+    priority: 'critical', limit: 5, category: scopedDept
+  })
+  const { data: recentComplaints } = useComplaints({ limit: 4, category: scopedDept })
+
+  // KPI cards derived from live analytics
+  const kpis = analytics ? [
+    { title: 'Open Issues', value: String(analytics.open_issues), trend: 'Active', trendUp: false, icon: 'folder_open', color: 'blue' },
+    { title: 'Critical', value: String(analytics.critical_issues), trend: 'Urgent', trendUp: false, icon: 'priority_high', color: 'red' },
+    { title: 'High Priority', value: String(analytics.high_priority_issues), trend: 'Important', trendUp: false, icon: 'report', color: 'orange' },
+    { title: 'Resolved', value: String(analytics.resolved_issues), trend: 'Completed', trendUp: true, icon: 'check_circle', color: 'green' },
+  ] : []
+
+  // Chart data derived from API
+  const deptData = analytics?.department_breakdown?.map(d => ({
+    name: d.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    issues: d.count,
+  })) || []
+
+  const priorityData = analytics?.priority_breakdown?.map(p => ({
+    name: p.priority.charAt(0).toUpperCase() + p.priority.slice(1),
+    value: p.count,
+    color: PRIORITY_COLORS[p.priority] || '#888',
+  })) || []
 
   return (
     <AuthorityLayout>
       <div className="space-y-lg">
         {/* Page title */}
         <div>
-          <h1 className="text-headline-lg text-on-surface font-semibold">Authority Dashboard</h1>
-          <p className="text-body-md text-on-surface-variant mt-xs">Real-time city-wide civic issue management</p>
+          <h1 className="text-headline-lg text-on-surface font-semibold">
+            {role === 'super_admin' ? 'Super Admin Dashboard' : 'Authority Dashboard'}
+          </h1>
+          <p className="text-body-md text-on-surface-variant mt-xs">
+            {role === 'super_admin' ? 'City-wide civic issue management' : `${departmentKey?.replace(/_/g, ' ')} department management`}
+          </p>
         </div>
 
         {/* KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
-          {kpis.map(kpi => <KpiCard key={kpi.title} {...kpi} />)}
+          {analyticsLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="glass-card rounded-xl p-md animate-pulse h-24" />
+              ))
+            : kpis.map(kpi => <KpiCard key={kpi.title} {...kpi} />)
+          }
         </div>
 
         {/* Main 2-column layout */}
@@ -62,70 +88,80 @@ export default function AuthorityDashboard() {
           {/* Left: Critical Issue Queue */}
           <div className="lg:col-span-2 glass-card rounded-xl overflow-hidden">
             <div className="px-md py-sm border-b border-outline-variant/20 flex items-center justify-between">
-              <h2 className="text-headline-md text-on-surface font-semibold">Critical / High Priority Issue Queue</h2>
+              <h2 className="text-headline-md text-on-surface font-semibold">Critical Priority Issue Queue</h2>
               <button onClick={() => navigate('/authority/issues')} className="text-primary-container text-label-md font-semibold hover:underline flex items-center gap-xs">
                 View All <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
               </button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full data-table">
-                <thead>
-                  <tr>
-                    <th>Issue</th>
-                    <th>Priority</th>
-                    <th className="hidden md:table-cell">Dept</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {criticalIssues.map(issue => (
-                    <tr key={issue.id} className={issue.priority === 'Critical' ? 'row-critical' : issue.priority === 'High' ? 'row-high' : ''}>
-                      <td>
-                        <div className="font-medium text-on-surface">{issue.title}</div>
-                        <div className="text-body-sm text-on-surface-variant">{issue.id} · {issue.complaints} complaints</div>
-                      </td>
-                      <td><PriorityBadge priority={issue.priority} /></td>
-                      <td className="hidden md:table-cell text-on-surface-variant">{issue.dept}</td>
-                      <td><StatusBadge status={issue.status} /></td>
-                      <td>
-                        <button onClick={() => navigate(`/authority/issues/${issue.id}`)} className="text-primary-container hover:underline text-label-md font-semibold whitespace-nowrap">
-                          Open
-                        </button>
-                      </td>
+              {issuesLoading ? (
+                <div className="p-md"><LoadingSkeleton rows={5} /></div>
+              ) : (
+                <table className="w-full data-table">
+                  <thead>
+                    <tr>
+                      <th>Issue</th>
+                      <th>Priority</th>
+                      <th className="hidden md:table-cell">Dept</th>
+                      <th>Status</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(criticalIssues || []).map(issue => (
+                      <tr key={issue.id} className="row-critical cursor-pointer" onClick={() => navigate(`/authority/issues/${issue.id}`)}>
+                        <td>
+                          <div className="font-medium text-on-surface truncate max-w-[200px]">{issue.title}</div>
+                          <div className="text-body-sm text-on-surface-variant">{issue.complaint_count} complaints · {issue.address || 'No location'}</div>
+                        </td>
+                        <td><PriorityBadge priority={issue.priority?.charAt(0).toUpperCase() + issue.priority?.slice(1)} /></td>
+                        <td className="hidden md:table-cell text-on-surface-variant text-body-sm">{issue.department_name || issue.category}</td>
+                        <td><StatusBadge status={issue.status?.replace(/_/g, ' ')} /></td>
+                        <td>
+                          <button className="text-primary-container hover:underline text-label-md font-semibold whitespace-nowrap">Open</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {!issuesLoading && (!criticalIssues || criticalIssues.length === 0) && (
+                      <tr>
+                        <td colSpan={5} className="text-center text-on-surface-variant py-lg">
+                          <span className="material-symbols-outlined block mx-auto mb-xs" style={{ fontSize: '32px' }}>check_circle</span>
+                          No critical issues! 🎉
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 
-          {/* Right: Mini Map */}
+          {/* Right: Quick stats */}
           <div className="glass-card rounded-xl overflow-hidden flex flex-col">
             <div className="px-md py-sm border-b border-outline-variant/20">
-              <h2 className="text-headline-md text-on-surface font-semibold">Hotspot Map</h2>
+              <h2 className="text-headline-md text-on-surface font-semibold">Priority Distribution</h2>
             </div>
-            <div className="flex-1 bg-gradient-to-br from-blue-50 to-blue-100 relative flex items-center justify-center min-h-[200px]">
-              <div className="absolute inset-0 opacity-20" style={{
-                backgroundImage: 'repeating-linear-gradient(0deg, #93c5fd 0, #93c5fd 1px, transparent 0, transparent 30px), repeating-linear-gradient(90deg, #93c5fd 0, #93c5fd 1px, transparent 0, transparent 30px)',
-                backgroundSize: '30px 30px'
-              }} />
-              {/* Hotspot markers */}
-              {[
-                { x: '30%', y: '35%', size: 48, color: 'rgba(186,26,26,0.35)', label: 'Ward 12' },
-                { x: '60%', y: '55%', size: 36, color: 'rgba(230,81,0,0.3)', label: 'Sector 7' },
-                { x: '50%', y: '25%', size: 28, color: 'rgba(0,77,153,0.25)', label: 'MG Rd' },
-              ].map(marker => (
-                <div key={marker.label} className="absolute flex flex-col items-center" style={{ left: marker.x, top: marker.y, transform: 'translate(-50%,-50%)' }}>
-                  <div className="rounded-full animate-pulse" style={{ width: marker.size, height: marker.size, background: marker.color }} />
-                  <span className="text-body-sm text-primary font-medium mt-[2px] bg-white/80 px-[4px] rounded">{marker.label}</span>
-                </div>
-              ))}
+            <div className="flex-1 p-md">
+              {analyticsLoading ? (
+                <div className="animate-pulse h-40 bg-surface-container rounded-lg" />
+              ) : priorityData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={priorityData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" paddingAngle={3}>
+                      {priorityData.map(entry => <Cell key={entry.name} fill={entry.color} />)}
+                    </Pie>
+                    <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 11, color: '#424752' }}>{v}</span>} />
+                    <Tooltip formatter={v => [`${v} issues`]} contentStyle={{ borderRadius: '8px', fontSize: '13px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-40 flex items-center justify-center text-on-surface-variant text-body-sm">No data yet</div>
+              )}
             </div>
             <div className="px-md py-sm border-t border-outline-variant/20">
               <button onClick={() => navigate('/authority/map')} className="text-primary-container text-label-md font-semibold hover:underline flex items-center gap-xs">
                 <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>map</span>
-                View Full Map
+                View Heatmap
               </button>
             </div>
           </div>
@@ -136,47 +172,43 @@ export default function AuthorityDashboard() {
           {/* Dept Breakdown Bar */}
           <div className="glass-card rounded-xl p-md">
             <h3 className="text-headline-md text-on-surface font-semibold mb-md">Department Breakdown</h3>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={deptData} barSize={20}>
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#424752' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#424752' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '13px' }} />
-                <Bar dataKey="issues" fill="#1565c0" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {analyticsLoading ? (
+              <div className="animate-pulse h-44 bg-surface-container rounded-lg" />
+            ) : deptData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={deptData} barSize={20}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#424752' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#424752' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '13px' }} />
+                  <Bar dataKey="issues" fill="#1565c0" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-44 flex items-center justify-center text-on-surface-variant text-body-sm">No department data yet</div>
+            )}
           </div>
 
-          {/* Status Breakdown Donut */}
+          {/* Recent AI Decisions from live complaints */}
           <div className="glass-card rounded-xl p-md">
-            <h3 className="text-headline-md text-on-surface font-semibold mb-md">Status Breakdown</h3>
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie data={statusData} cx="40%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" paddingAngle={3}>
-                  {statusData.map(entry => <Cell key={entry.name} fill={entry.color} />)}
-                </Pie>
-                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={10} formatter={v => <span style={{ fontSize: 12, color: '#424752' }}>{v}</span>} />
-                <Tooltip formatter={(val) => [`${val}%`]} contentStyle={{ borderRadius: '8px', fontSize: '13px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Recent AI Decisions */}
-        <div className="glass-card rounded-xl p-md">
-          <h3 className="text-headline-md text-on-surface font-semibold mb-md flex items-center gap-sm">
-            <span className="material-symbols-outlined text-[#7c4dff]" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-            Recent AI Decisions
-          </h3>
-          <div className="space-y-sm">
-            {recentAIDecisions.map(d => (
-              <div key={d.id} className="flex items-start gap-sm py-sm border-b border-outline-variant/20 last:border-0">
-                <span className="bg-purple-100 text-purple-700 text-label-md font-semibold px-sm py-[2px] rounded-md shrink-0">{d.id}</span>
-                <p className="text-body-md text-on-surface flex-1">
-                  <span className="font-semibold">Complaint {d.id}</span> {d.text}
-                </p>
-                <span className="text-body-sm text-on-surface-variant whitespace-nowrap shrink-0">{d.time}</span>
-              </div>
-            ))}
+            <h3 className="text-headline-md text-on-surface font-semibold mb-md flex items-center gap-sm">
+              <span className="material-symbols-outlined text-[#7c4dff]" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+              Recent AI Decisions
+            </h3>
+            <div className="space-y-sm">
+              {(recentComplaints || []).map(c => (
+                <div key={c.id} className="flex items-start gap-sm py-sm border-b border-outline-variant/20 last:border-0">
+                  <span className="bg-purple-100 text-purple-700 text-label-md font-semibold px-sm py-[2px] rounded-md shrink-0">#{c.id.slice(-4)}</span>
+                  <p className="text-body-sm text-on-surface flex-1">
+                    <span className="font-semibold capitalize">{c.duplicate_state === 'linked' ? 'linked to existing issue' : `routed to ${c.department || c.category}`}</span>
+                    {c.duplicate_state === 'linked' && ' (AI duplicate detection)'}
+                  </p>
+                  <PriorityBadge priority={c.priority?.charAt(0).toUpperCase() + c.priority?.slice(1)} />
+                </div>
+              ))}
+              {(!recentComplaints || recentComplaints.length === 0) && (
+                <p className="text-body-sm text-on-surface-variant text-center py-md">No complaints yet. Submit one to see AI decisions!</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

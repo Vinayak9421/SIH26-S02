@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
-import { Toaster } from 'sonner'
 import { motion } from 'framer-motion'
+import { useAuthStore } from './store/authStore'
 
 // Auth
 import LoginPage from './features/auth/LoginPage'
@@ -18,11 +18,27 @@ import CityMap from './features/authority/CityMap'
 import CityAnalytics from './features/authority/CityAnalytics'
 import AdminSettings from './features/authority/AdminSettings'
 
+// Protected route wrapper
+function ProtectedRoute({ children, allowedRoles }) {
+  const { token, role } = useAuthStore()
+  if (!token) return <Navigate to="/login" replace />
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to={role === 'citizen' ? '/citizen' : '/authority'} replace />
+  }
+  return children
+}
+
 // Landing page component
 function LandingPage() {
+  const { token, role } = useAuthStore()
+
+  // Auto-redirect if already logged in
+  if (token) {
+    return <Navigate to={role === 'citizen' ? '/citizen' : '/authority'} replace />
+  }
+
   return (
     <div className="min-h-screen bg-[#f7f8fa] flex flex-col">
-      {/* Hero Section */}
       <header className="bg-white border-b border-outline-variant/30 px-margin-desktop py-sm flex items-center justify-between">
         <div className="flex items-center gap-xs">
           <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '28px', fontVariationSettings: "'FILL' 1" }}>account_balance</span>
@@ -35,7 +51,6 @@ function LandingPage() {
 
       <main className="flex-1 flex flex-col items-center justify-center px-margin-mobile md:px-margin-desktop py-xl text-center gap-xl">
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-3xl space-y-lg">
-          {/* AI badge */}
           <div className="inline-flex items-center gap-xs bg-purple-50 text-purple-700 border border-purple-200 px-md py-sm rounded-full text-label-md font-semibold">
             <span className="material-symbols-outlined" style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
             Powered by AI · SIH 2026
@@ -51,18 +66,13 @@ function LandingPage() {
           </p>
 
           <div className="flex flex-wrap gap-md justify-center">
-            <Link to="/citizen" className="bg-primary-container text-on-primary text-body-lg font-semibold px-lg py-md rounded-xl hover:shadow-md hover:-translate-y-px transition-all flex items-center gap-sm">
-              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>person</span>
-              Citizen Portal
-            </Link>
-            <Link to="/authority" className="border-2 border-primary-container text-primary-container text-body-lg font-semibold px-lg py-md rounded-xl hover:bg-primary-container/5 transition-all flex items-center gap-sm">
-              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>shield</span>
-              Authority Dashboard
+            <Link to="/login" className="bg-primary-container text-on-primary text-body-lg font-semibold px-lg py-md rounded-xl hover:shadow-md hover:-translate-y-px transition-all flex items-center gap-sm">
+              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>login</span>
+              Get Started
             </Link>
           </div>
         </motion.div>
 
-        {/* Feature Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-md max-w-4xl w-full">
           {[
             { icon: 'translate', title: 'Multilingual AI', desc: 'Submit complaints in Hindi, English, or Hinglish. AI understands all.', color: 'text-blue-600 bg-blue-50' },
@@ -96,7 +106,6 @@ function LandingPage() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Toaster position="top-right" richColors />
       <Routes>
         {/* Landing */}
         <Route path="/" element={<LandingPage />} />
@@ -105,18 +114,18 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
 
         {/* Citizen routes */}
-        <Route path="/citizen" element={<CitizenDashboard />} />
-        <Route path="/citizen/submit" element={<SubmitComplaint />} />
-        <Route path="/citizen/track/:id" element={<ComplaintTracking />} />
-        <Route path="/citizen/track" element={<ComplaintTracking />} />
+        <Route path="/citizen" element={<ProtectedRoute allowedRoles={['citizen']}><CitizenDashboard /></ProtectedRoute>} />
+        <Route path="/citizen/submit" element={<ProtectedRoute allowedRoles={['citizen']}><SubmitComplaint /></ProtectedRoute>} />
+        <Route path="/citizen/track/:id" element={<ProtectedRoute allowedRoles={['citizen']}><ComplaintTracking /></ProtectedRoute>} />
+        <Route path="/citizen/track" element={<ProtectedRoute allowedRoles={['citizen']}><ComplaintTracking /></ProtectedRoute>} />
 
         {/* Authority routes */}
-        <Route path="/authority" element={<AuthorityDashboard />} />
-        <Route path="/authority/issues" element={<IssueQueue />} />
-        <Route path="/authority/issues/:id" element={<IssueDetail />} />
-        <Route path="/authority/map" element={<CityMap />} />
-        <Route path="/authority/analytics" element={<CityAnalytics />} />
-        <Route path="/authority/settings" element={<AdminSettings />} />
+        <Route path="/authority" element={<ProtectedRoute allowedRoles={['department_admin', 'super_admin']}><AuthorityDashboard /></ProtectedRoute>} />
+        <Route path="/authority/issues" element={<ProtectedRoute allowedRoles={['department_admin', 'super_admin']}><IssueQueue /></ProtectedRoute>} />
+        <Route path="/authority/issues/:id" element={<ProtectedRoute allowedRoles={['department_admin', 'super_admin']}><IssueDetail /></ProtectedRoute>} />
+        <Route path="/authority/map" element={<ProtectedRoute allowedRoles={['department_admin', 'super_admin']}><CityMap /></ProtectedRoute>} />
+        <Route path="/authority/analytics" element={<ProtectedRoute allowedRoles={['department_admin', 'super_admin']}><CityAnalytics /></ProtectedRoute>} />
+        <Route path="/authority/settings" element={<ProtectedRoute allowedRoles={['department_admin', 'super_admin']}><AdminSettings /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -15,6 +15,18 @@ from app.schemas.issue import (
     IssueStatusTimelineItem
 )
 from app.services.ai.category_templates import CATEGORY_DEPARTMENT_MAPPING
+import uuid as _uuid_mod
+
+
+def _safe_uuid(val) -> Optional[str]:
+    """Return val as str if it's a valid UUID, else None. Prevents demo admin string IDs from crashing uuid columns."""
+    if val is None:
+        return None
+    try:
+        _uuid_mod.UUID(str(val))
+        return str(val)
+    except (ValueError, AttributeError):
+        return None
 
 
 class IssueService:
@@ -100,7 +112,7 @@ class IssueService:
                 IssueStatusTimelineItem(
                     status=hist.status,
                     note=hist.note,
-                    changed_by=hist.changed_by,
+                    changed_by=str(hist.changed_by) if hist.changed_by else None,
                     created_at=hist.created_at
                 )
             )
@@ -161,10 +173,10 @@ class IssueService:
 
         if status_changed or payload.note:
             db.add(IssueStatusHistory(
-                issue_id=issue.id,
+                issue_id=str(issue.id),
                 status=issue.status,
                 note=payload.note or f"Issue status changed to {issue.status}",
-                changed_by=changed_by_id
+                changed_by=_safe_uuid(changed_by_id)
             ))
 
         db.commit()
@@ -196,15 +208,15 @@ class IssueService:
         issue.updated_at = now
 
         db.add(IssueStatusHistory(
-            issue_id=issue.id,
+            issue_id=str(issue.id),
             status="resolved",
             note=note or "Issue resolved by department authority",
-            changed_by=changed_by_id
+            changed_by=_safe_uuid(changed_by_id)
         ))
 
         # Cascade resolution to linked citizen complaints
         unresolved_complaints = db.query(Complaint).filter(
-            Complaint.issue_id == issue.id,
+            Complaint.issue_id == str(issue.id),
             Complaint.status.in_(["pending", "in_progress"])
         ).all()
 
@@ -213,10 +225,10 @@ class IssueService:
             complaint.status = "resolved"
             complaint.updated_at = now
             db.add(ComplaintStatusHistory(
-                complaint_id=complaint.id,
+                complaint_id=str(complaint.id),
                 status="resolved",
                 note=f"Resolved automatically via Issue resolution: {issue.title}",
-                changed_by=changed_by_id
+                changed_by=_safe_uuid(changed_by_id)
             ))
             resolved_count += 1
 
@@ -266,16 +278,16 @@ class IssueService:
         db.add(new_issue)
         db.flush()
 
-        complaint.issue_id = new_issue.id
+        complaint.issue_id = str(new_issue.id)
         complaint.duplicate_state = "none"
         complaint.duplicate_of_issue_id = None
         complaint.updated_at = datetime.utcnow()
 
         db.add(ComplaintStatusHistory(
-            complaint_id=complaint.id,
+            complaint_id=str(complaint.id),
             status=complaint.status,
             note="Unlinked from previous issue and assigned separate ticket by department admin",
-            changed_by=changed_by_id
+            changed_by=_safe_uuid(changed_by_id)
         ))
 
         db.commit()

@@ -5,14 +5,21 @@ from jose import jwt, JWTError
 
 from app.config import settings
 from app.schemas.user import CurrentUser
+from app.services.local_auth_service import decode_local_jwt
 
 logger = logging.getLogger("uvicorn.error")
 
 
 def parse_jwt_token(token: str) -> Optional[CurrentUser]:
     """
-    Decodes Supabase / standard JWT token and extracts user role and metadata.
+    Decodes a JWT token. Tries local JWT first, then falls back to Supabase JWT.
     """
+    # 1. Try local JWT (primary for hackathon)
+    user = decode_local_jwt(token)
+    if user:
+        return user
+
+    # 2. Fallback: Supabase / standard JWT
     try:
         payload = jwt.decode(
             token,
@@ -22,16 +29,14 @@ def parse_jwt_token(token: str) -> Optional[CurrentUser]:
         )
         user_id = payload.get("sub") or payload.get("id")
         email = payload.get("email")
-        
-        # Extract user_metadata or app_metadata
+
         app_metadata = payload.get("app_metadata", {})
         user_metadata = payload.get("user_metadata", {})
-        
+
         role = app_metadata.get("role") or user_metadata.get("role") or payload.get("role") or "citizen"
         department_id = app_metadata.get("department_id") or user_metadata.get("department_id")
         department_key = app_metadata.get("department_key") or user_metadata.get("department_key")
 
-        # Map role (if legacy 'officer' is passed, map to 'department_admin')
         if role == "officer":
             role = "department_admin"
 
@@ -45,6 +50,7 @@ def parse_jwt_token(token: str) -> Optional[CurrentUser]:
     except JWTError as e:
         logger.debug(f"JWT decode failed: {e}")
         return None
+
 
 
 async def get_current_user(request: Request) -> CurrentUser:

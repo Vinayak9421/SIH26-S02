@@ -30,6 +30,7 @@ class IssueListItem(BaseModel):
     category: str
     department_id: Optional[str] = None
     department_name: Optional[str] = None
+    assigned_officer_name: Optional[str] = None
     priority: str
     priority_score: int
     complaint_count: int
@@ -53,6 +54,7 @@ class IssueDetailResponse(BaseModel):
     department_id: Optional[str] = None
     department_name: Optional[str] = None
     assigned_officer_id: Optional[str] = None
+    assigned_officer_name: Optional[str] = None
     priority: str
     priority_score: int
     complaint_count: int
@@ -74,6 +76,7 @@ class IssueUpdate(BaseModel):
     status: Optional[Literal["open", "in_progress", "resolved"]] = None
     priority: Optional[Literal["low", "medium", "high", "critical"]] = None
     assigned_officer_id: Optional[str] = None
+    assigned_officer_name: Optional[str] = None
     note: Optional[str] = None
 
 

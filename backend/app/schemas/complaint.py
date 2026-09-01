@@ -61,6 +61,9 @@ class ComplaintDetailResponse(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    satisfaction_rating: Optional[int] = None
+    satisfaction_feedback: Optional[str] = None
+    rated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     issue_id: Optional[str] = None
@@ -82,6 +85,7 @@ class ComplaintListItem(BaseModel):
     duplicate_state: str
     issue_id: Optional[str] = None
     address: Optional[str] = None
+    satisfaction_rating: Optional[int] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -90,3 +94,9 @@ class ComplaintListItem(BaseModel):
 class ComplaintStatusUpdate(BaseModel):
     status: Literal["pending", "in_progress", "resolved", "rejected"]
     note: Optional[str] = None
+
+
+class ComplaintRatingCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5, description="Satisfaction rating from 1 to 5 stars")
+    feedback: Optional[str] = Field(default=None, max_length=1000, description="Optional citizen feedback text")
+
