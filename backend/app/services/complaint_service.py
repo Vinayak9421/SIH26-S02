@@ -1,3 +1,4 @@
+import uuid
 import json
 import logging
 from typing import List, Optional
@@ -7,8 +8,10 @@ from sqlalchemy import desc
 
 from app.models.complaint import Complaint
 from app.models.issue import Issue
+from app.models.profile import Profile
 from app.models.department import Department
 from app.models.history import ComplaintStatusHistory, IssueStatusHistory
+
 from app.schemas.complaint import (
     ComplaintCreate,
     ComplaintSubmitResponse,
@@ -92,6 +95,35 @@ class ComplaintService:
             db.refresh(dept)
         return dept
 
+    @staticmethod
+    def get_or_create_profile(db: Session, current_user: CurrentUser) -> Optional[str]:
+        if not current_user or not current_user.id:
+            return None
+        try:
+            user_uuid = str(uuid.UUID(str(current_user.id)))
+        except Exception:
+            user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(current_user.id)))
+
+        profile = db.query(Profile).filter(Profile.id == user_uuid).first()
+        if profile:
+            return str(profile.id)
+
+        user_email = current_user.email or f"{user_uuid}@civicissue.local"
+        profile_by_email = db.query(Profile).filter(Profile.email == user_email).first()
+        if profile_by_email:
+            return str(profile_by_email.id)
+
+        profile = Profile(
+            id=user_uuid,
+            full_name=getattr(current_user, "name", None) or (current_user.email.split("@")[0].replace(".", " ").title() if current_user.email else "Citizen"),
+            email=user_email,
+            role="user" if current_user.role == "citizen" else current_user.role
+        )
+        db.add(profile)
+        db.flush()
+        return str(profile.id)
+
+
     @classmethod
     def submit_complaint(
         cls,
@@ -108,16 +140,32 @@ class ComplaintService:
         5. Persist complaint & status history
         6. Return ComplaintSubmitResponse
         """
+        # Ensure citizen profile exists in database with valid UUID
+        citizen_id = cls.get_or_create_profile(db, current_user)
+
+        # Ensure coordinates are resolved if address string is provided
+        lat = payload.latitude
+        lon = payload.longitude
+        if (lat is None or lon is None) and payload.address:
+            try:
+                from app.services.geocoding_service import geocode_address_sync
+                geo_lat, geo_lon = geocode_address_sync(payload.address)
+                if geo_lat is not None and geo_lon is not None:
+                    lat, lon = geo_lat, geo_lon
+            except Exception:
+                pass
+
         # 1. Fetch active candidate issues
         candidates = cls.get_active_issue_candidates(db)
 
         # 2. Run AI intelligence pipeline
         ai_res = analyze_complaint(
             text=payload.text,
-            latitude=payload.latitude,
-            longitude=payload.longitude,
+            latitude=lat,
+            longitude=lon,
             active_issues=candidates
         )
+
 
         category = ai_res["category"]
         dept = cls.get_or_create_department(db, category)
@@ -154,7 +202,7 @@ class ComplaintService:
             if len(issue_title) > 90:
                 issue_title = issue_title[:87] + "..."
 
-            hotspot_key = get_hotspot_key(payload.latitude, payload.longitude)
+            hotspot_key = get_hotspot_key(lat, lon)
 
             target_issue = Issue(
                 department_id=str(department_id),
@@ -166,8 +214,8 @@ class ComplaintService:
                 priority_score=ai_res["priority_score"],
                 complaint_count=1,
                 status="open",
-                latitude=payload.latitude,
-                longitude=payload.longitude,
+                latitude=lat,
+                longitude=lon,
                 address=payload.address,
                 hotspot_key=hotspot_key
             )
@@ -188,8 +236,9 @@ class ComplaintService:
 
         # 5. Create Complaint Record
         new_complaint = Complaint(
-            user_id=str(current_user.id),
+            user_id=citizen_id,
             issue_id=str(target_issue.id),
+
             department_id=str(department_id) if department_id else None,
             text=payload.text,
             normalized_text=ai_res["normalized_text"],
@@ -202,10 +251,11 @@ class ComplaintService:
             duplicate_state=duplicate_state,
             duplicate_of_issue_id=str(matched_issue_id) if matched_issue_id and duplicate_state == "linked" else None,
             status="pending",
-            latitude=payload.latitude,
-            longitude=payload.longitude,
+            latitude=lat,
+            longitude=lon,
             address=payload.address
         )
+
         db.add(new_complaint)
         db.flush()
 
