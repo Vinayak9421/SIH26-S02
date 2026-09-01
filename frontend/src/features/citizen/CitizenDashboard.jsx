@@ -10,14 +10,14 @@ import { useAuthStore } from '../../store/authStore'
 
 const cardVariants = {
   hidden: { opacity: 0, y: 16 },
-  visible: i => ({ opacity: 1, y: 0, transition: { delay: i * 0.07, duration: 0.32, ease: 'easeOut' } }),
+  visible: i => ({ opacity: 1, y: 0, transition: { delay: i * 0.05, duration: 0.3, ease: 'easeOut' } }),
 }
 
 const PRIORITY_COLORS = {
-  critical: '#ba1a1a',
-  high: '#e65100',
-  medium: '#1565c0',
-  low: '#2e7d32',
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#3b82f6',
+  low: '#10b981',
 }
 
 export default function CitizenDashboard() {
@@ -31,36 +31,38 @@ export default function CitizenDashboard() {
   const inProgress = (complaints || []).filter(c => c.status === 'in_progress').length
   const resolved = (complaints || []).filter(c => c.status === 'resolved').length
 
-  // Check for resolved complaints that citizen can rate
   const unratedResolved = (complaints || []).filter(c => c.status === 'resolved' && !c.satisfaction_rating)
 
   const statusChips = [
-    ...(pending > 0 ? [{ label: `${pending} Pending`, color: 'bg-blue-50 text-blue-700 border-blue-200', icon: 'pending_actions' }] : []),
-    ...(inProgress > 0 ? [{ label: `${inProgress} In Progress`, color: 'bg-orange-50 text-orange-700 border-orange-200', icon: 'hourglass_top' }] : []),
-    ...(resolved > 0 ? [{ label: `${resolved} Resolved`, color: 'bg-green-50 text-green-700 border-green-200', icon: 'check_circle' }] : []),
+    ...(pending > 0 ? [{ label: `${pending} Pending Triage`, color: 'bg-indigo-50 text-indigo-700 border-indigo-200/80', icon: 'pending_actions' }] : []),
+    ...(inProgress > 0 ? [{ label: `${inProgress} In Progress`, color: 'bg-amber-50 text-amber-800 border-amber-200/80', icon: 'hourglass_top' }] : []),
+    ...(resolved > 0 ? [{ label: `${resolved} Resolved`, color: 'bg-emerald-50 text-emerald-800 border-emerald-200/80', icon: 'check_circle' }] : []),
   ]
 
-  // Top 3 active issues in the city for "Trending Issues"
   const trendingIssues = (nearbyIssues || [])
     .filter(iss => iss.status !== 'resolved')
     .slice(0, 3)
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
+    <div className="min-h-screen bg-slate-50 font-sans pb-12">
       <CitizenAppBar />
-      <main className="max-w-4xl mx-auto px-margin-mobile md:px-margin-desktop py-lg space-y-lg">
-        {/* Welcome section */}
-        <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-md">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+      <main className="max-w-5xl mx-auto px-4 md:px-8 py-8 space-y-8">
+        {/* Welcome Section */}
+        <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <div>
-              <h1 className="text-headline-lg text-on-surface font-semibold">Welcome back, {name || 'Citizen'} 👋</h1>
-              <p className="text-body-md text-on-surface-variant mt-xs">Track your complaints and view live civic reports across your area.</p>
+              <h1 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent">
+                Welcome back, {name || 'Citizen'} 👋
+              </h1>
+              <p className="text-sm md:text-base text-slate-600 mt-1 font-medium">
+                Track your submitted grievances and monitor live civic resolution status across your neighborhood.
+              </p>
             </div>
             <button
               onClick={() => navigate('/citizen/submit')}
-              className="bg-primary-container text-on-primary text-label-md font-semibold px-md py-sm rounded-xl hover:shadow-md hover:-translate-y-px transition-all flex items-center gap-xs self-start sm:self-auto"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/35 transition-all flex items-center gap-2 self-start sm:self-auto shrink-0"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>add_circle</span>
               New Complaint
             </button>
           </div>
@@ -70,24 +72,24 @@ export default function CitizenDashboard() {
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-emerald-50 border border-emerald-200 rounded-xl p-md flex items-center justify-between gap-md shadow-sm"
+              className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-2xl p-5 flex items-center justify-between gap-4 shadow-sm"
             >
-              <div className="flex items-center gap-sm">
-                <span className="material-symbols-outlined text-emerald-600" style={{ fontSize: '24px', fontVariationSettings: "'FILL' 1" }}>
-                  task_alt
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>task_alt</span>
+                </div>
                 <div>
-                  <p className="text-body-md font-semibold text-emerald-950">
+                  <p className="text-sm md:text-base font-bold text-emerald-950">
                     Good news! {unratedResolved.length === 1 ? 'One of your complaints has been resolved' : `${unratedResolved.length} complaints have been resolved`}
                   </p>
-                  <p className="text-body-sm text-emerald-800">
-                    Please share your satisfaction feedback or download your official resolution receipt.
+                  <p className="text-xs md:text-sm text-emerald-700 font-medium">
+                    Rate the resolution quality or download your official digital receipt.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => navigate(`/citizen/track/${unratedResolved[0].id}`)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-label-md font-semibold px-md py-xs rounded-lg transition-colors whitespace-nowrap"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-xl transition-all shadow-xs shrink-0"
               >
                 Rate & View
               </button>
@@ -95,10 +97,10 @@ export default function CitizenDashboard() {
           )}
 
           {statusChips.length > 0 && (
-            <div className="flex flex-wrap gap-sm">
+            <div className="flex flex-wrap gap-2.5">
               {statusChips.map(chip => (
-                <div key={chip.label} className={`flex items-center gap-xs px-md py-sm rounded-full text-label-md font-semibold border ${chip.color} shadow-sm`}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>{chip.icon}</span>
+                <div key={chip.label} className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold border ${chip.color} shadow-xs`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{chip.icon}</span>
                   {chip.label}
                 </div>
               ))}
@@ -106,21 +108,21 @@ export default function CitizenDashboard() {
           )}
         </motion.section>
 
-        {/* Live City Map & Trending Issues Widget */}
-        <section className="glass-card rounded-xl p-md space-y-md">
+        {/* Live City Map & Nearby Issues Widget */}
+        <section className="glass-card rounded-3xl p-6 space-y-4 border border-slate-200/80 bg-white/80">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '22px', fontVariationSettings: "'FILL' 1" }}>
-                explore
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>explore</span>
+              </div>
               <div>
-                <h2 className="text-headline-md text-on-surface font-semibold">Civic Issues Near You</h2>
-                <p className="text-body-sm text-on-surface-variant">Live anonymized map of community-reported civic issues</p>
+                <h2 className="text-base md:text-lg font-bold text-slate-900">Community Civic Map</h2>
+                <p className="text-xs text-slate-500 font-medium">Live anonymized spatial reports in your surrounding area</p>
               </div>
             </div>
             <button
               onClick={() => setShowMap(!showMap)}
-              className="text-label-md text-primary-container font-semibold hover:underline flex items-center gap-xs"
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
                 {showMap ? 'expand_less' : 'expand_more'}
@@ -130,17 +132,17 @@ export default function CitizenDashboard() {
           </div>
 
           {showMap && (
-            <div className="h-64 w-full rounded-lg overflow-hidden border border-outline-variant/30 relative">
+            <div className="h-72 w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative z-0">
               {isMapLoading ? (
-                <div className="h-full w-full bg-slate-100 flex items-center justify-center text-body-sm text-slate-500">
-                  Loading map...
+                <div className="h-full w-full bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-500">
+                  Loading map markers...
                 </div>
               ) : (
                 <MapContainer
-                  center={[28.6139, 77.209]}
+                  center={[19.2087, 72.9716]}
                   zoom={12}
                   style={{ height: '100%', width: '100%' }}
-                  zoomControl={false}
+                  zoomControl={true}
                 >
                   <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -149,25 +151,23 @@ export default function CitizenDashboard() {
                   {(nearbyIssues || []).map((iss) => (
                     <CircleMarker
                       key={iss.id}
-                      center={[iss.latitude || 28.6139, iss.longitude || 77.209]}
-                      radius={iss.complaint_count > 1 ? 9 : 6}
+                      center={[iss.latitude || 19.2087, iss.longitude || 72.9716]}
+                      radius={iss.priority === 'critical' ? 10 : 7}
                       pathOptions={{
-                        color: PRIORITY_COLORS[iss.priority] || '#1565c0',
-                        fillColor: PRIORITY_COLORS[iss.priority] || '#1565c0',
-                        fillOpacity: 0.6,
+                        color: PRIORITY_COLORS[iss.priority] || '#3b82f6',
+                        fillColor: PRIORITY_COLORS[iss.priority] || '#3b82f6',
+                        fillOpacity: 0.8,
                         weight: 2,
                       }}
                     >
                       <Popup>
-                        <div className="p-1 space-y-1 text-xs max-w-[200px]">
-                          <p className="font-bold text-slate-800 leading-tight">{iss.title}</p>
-                          <div className="flex items-center justify-between text-slate-500">
-                            <span className="capitalize font-semibold">{iss.category?.replace(/_/g, ' ')}</span>
-                            <span className="capitalize">{iss.status?.replace(/_/g, ' ')}</span>
+                        <div className="p-2 space-y-1.5 font-sans min-w-[180px]">
+                          <div className="font-bold text-sm text-slate-800">{iss.title}</div>
+                          <div className="flex items-center gap-1.5">
+                            <CategoryBadge category={iss.category} />
+                            <PriorityBadge priority={iss.priority} />
                           </div>
-                          {iss.complaint_count > 1 && (
-                            <p className="text-blue-700 font-semibold">{iss.complaint_count} citizens reported this</p>
-                          )}
+                          <p className="text-xs text-slate-500 font-medium">📍 {iss.address || 'Reported Location'}</p>
                         </div>
                       </Popup>
                     </CircleMarker>
@@ -176,115 +176,83 @@ export default function CitizenDashboard() {
               )}
             </div>
           )}
-
-          {/* Trending Issues Near Me List */}
-          {trendingIssues.length > 0 && (
-            <div className="space-y-sm pt-xs">
-              <h3 className="text-body-sm font-semibold text-on-surface-variant flex items-center gap-xs">
-                <span className="material-symbols-outlined text-orange-500" style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>
-                  trending_up
-                </span>
-                Trending Issues in Your City
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-sm">
-                {trendingIssues.map((iss) => (
-                  <div key={iss.id} className="bg-slate-50 border border-outline-variant/30 rounded-lg p-sm space-y-xs">
-                    <div className="flex items-center justify-between">
-                      <CategoryBadge category={iss.category?.replace(/_/g, ' ')} />
-                      <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-xs py-[1px] rounded">
-                        {iss.complaint_count} reports
-                      </span>
-                    </div>
-                    <p className="text-body-sm font-medium text-on-surface line-clamp-2">{iss.title}</p>
-                    <p className="text-[11px] text-on-surface-variant truncate">
-                      {iss.address || 'GPS verified location'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
-        {/* Complaints list */}
-        <section className="space-y-md">
-          <h2 className="text-headline-md text-on-surface font-semibold">Your Submitted Complaints</h2>
+        {/* My Complaints List */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg md:text-xl font-bold text-slate-900">My Submitted Complaints</h2>
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+              {(complaints || []).length} Total
+            </span>
+          </div>
 
           {isLoading ? (
-            Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="glass-card rounded-xl p-md animate-pulse h-28" />
-            ))
-          ) : (complaints || []).length === 0 ? (
-            <div className="glass-card rounded-xl p-xl text-center">
-              <span className="material-symbols-outlined block mx-auto text-on-surface-variant mb-sm" style={{ fontSize: '48px' }}>inbox</span>
-              <h3 className="text-headline-md text-on-surface font-semibold">No complaints yet</h3>
-              <p className="text-body-md text-on-surface-variant mt-xs">Submit your first civic complaint and our AI will handle the rest.</p>
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="glass-card rounded-2xl p-5 animate-pulse h-32 bg-slate-100" />
+              ))}
+            </div>
+          ) : (complaints || []).length > 0 ? (
+            <div className="space-y-3.5">
+              {(complaints || []).map((c, i) => (
+                <motion.div
+                  key={c.id}
+                  custom={i}
+                  variants={cardVariants}
+                  initial="hidden"
+                  animate="visible"
+                  onClick={() => navigate(`/citizen/track/${c.id}`)}
+                  className="glass-card rounded-2xl p-5 hover:shadow-lg transition-all cursor-pointer border border-slate-200/80 bg-white/90 flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                >
+                  <div className="space-y-2 flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2">
+                      <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-200">
+                        #{c.id.slice(-6).toUpperCase()}
+                      </span>
+                      <CategoryBadge category={c.ai_category || c.category} />
+                      <PriorityBadge priority={c.priority} />
+                      <StatusBadge status={c.status?.replace(/_/g, ' ')} />
+                    </div>
+
+                    <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                      {c.text}
+                    </h3>
+
+                    <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                      <span>📍 {c.address || 'Location on map'}</span>
+                      <span>•</span>
+                      <span>{new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 self-end md:self-center shrink-0">
+                    <button className="flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
+                      Track Live <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="glass-card rounded-3xl p-12 text-center space-y-3 bg-white/80 border border-slate-200/80">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>post_add</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">No Complaints Submitted Yet</h3>
+              <p className="text-xs md:text-sm text-slate-500 max-w-md mx-auto font-medium">
+                Notice a broken streetlight, pothole, or garbage pile? Report it and our AI will immediately route it to the right department.
+              </p>
               <button
                 onClick={() => navigate('/citizen/submit')}
-                className="mt-md bg-primary-container text-on-primary text-label-md font-semibold px-lg py-sm rounded-xl hover:shadow-md transition-all"
+                className="mt-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-xs md:text-sm px-5 py-2.5 rounded-xl shadow-md transition-all"
               >
-                Submit a Complaint
+                Submit First Complaint
               </button>
             </div>
-          ) : (complaints || []).map((c, i) => (
-            <motion.div
-              key={c.id}
-              custom={i}
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-              className={`glass-card rounded-xl p-md group cursor-pointer ${c.status === 'resolved' ? 'border-l-4 border-l-green-500' : ''}`}
-              onClick={() => navigate(`/citizen/track/${c.id}`)}
-            >
-              <div className="flex flex-col gap-sm w-full">
-                <div className="flex justify-between items-start gap-sm">
-                  <div>
-                    <span className="text-body-sm text-on-surface-variant font-medium mr-sm font-mono">#{c.id?.slice(0, 8)}</span>
-                    <h3 className="text-headline-md text-on-surface font-semibold mt-[2px] line-clamp-2">{c.text}</h3>
-                  </div>
-                  <StatusBadge status={c.status?.replace(/_/g, ' ')} className="shrink-0" />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-sm">
-                  {c.category && <CategoryBadge category={c.category.replace(/_/g, ' ')} />}
-                  <PriorityBadge priority={c.priority?.charAt(0).toUpperCase() + c.priority?.slice(1)} />
-                  {c.department && <AiTag label={c.department} confidence={null} />}
-                  {c.image_url && (
-                    <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 font-semibold px-sm py-[2px] rounded-full flex items-center gap-[2px]">
-                      <span className="material-symbols-outlined text-[14px]">image</span>
-                      Photo Attached
-                    </span>
-                  )}
-                  {c.satisfaction_rating && (
-                    <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 font-semibold px-sm py-[2px] rounded-full flex items-center gap-[2px]">
-                      <span className="material-symbols-outlined text-[14px] text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                      {c.satisfaction_rating}/5 Rated
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-sm border-t border-outline-variant/30">
-                  <div className="flex items-center gap-xs text-on-surface-variant text-body-sm">
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>calendar_today</span>
-                    {new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {c.address && (
-                      <span className="flex items-center gap-[2px]">
-                        · <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>location_on</span>
-                        <span className="max-w-[140px] truncate">{c.address}</span>
-                      </span>
-                    )}
-                  </div>
-                  <button className="text-primary-container text-label-md font-semibold hover:underline flex items-center gap-[3px] transition-all">
-                    View & Track
-                    <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform" style={{ fontSize: '16px' }}>arrow_forward</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+          )}
         </section>
       </main>
     </div>
   )
 }
-
