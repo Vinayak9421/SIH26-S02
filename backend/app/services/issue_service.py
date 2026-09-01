@@ -128,9 +128,12 @@ class IssueService:
                     priority=c.priority,
                     status=c.status,
                     address=c.address,
+                    image_url=c.image_url,
+                    extracted_text_from_image=c.extracted_text_from_image,
                     created_at=c.created_at
                 )
             )
+
 
         # Status timeline
         timeline = []

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { AuthorityLayout } from '../../components/layout'
 import { PriorityBadge, StatusBadge, CategoryBadge, AiTag } from '../../components/ui'
 import { useIssueDetail, useUpdateIssue, useResolveIssue } from '../../hooks/useApi'
@@ -23,6 +23,7 @@ export default function IssueDetail() {
   const [pendingStatus, setPendingStatus] = useState(null)
   const [note, setNote] = useState('')
   const [resolving, setResolving] = useState(false)
+  const [selectedPhoto, setSelectedPhoto] = useState(null)
 
   const handleStatusUpdate = async () => {
     if (!pendingStatus) return
@@ -160,7 +161,7 @@ export default function IssueDetail() {
 
         {/* 2-Column Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Metrics & Complaints */}
+          {/* Left Column: Metrics & Complaints with Photos */}
           <div className="lg:col-span-2 space-y-6">
             {/* KPI Metric Cards */}
             <div className="grid grid-cols-3 gap-4">
@@ -178,29 +179,71 @@ export default function IssueDetail() {
               </div>
             </div>
 
-            {/* Linked Complaints List */}
+            {/* Linked Complaints List with Photo Inspection */}
             <div className="glass-card rounded-3xl p-6 space-y-4 border border-slate-200/80 bg-white/90 shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h2 className="text-base md:text-lg font-bold text-slate-900">
-                  Cluster-Linked Citizen Grievances
-                </h2>
+                <div>
+                  <h2 className="text-base md:text-lg font-bold text-slate-900">
+                    Cluster-Linked Citizen Grievances & Evidence
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium">Visual evidence submitted by citizens to assist department teams in resolving</p>
+                </div>
                 <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full border border-indigo-200">
                   {issue.linked_complaints?.length || 0} Reports
                 </span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {(issue.linked_complaints || []).map(c => (
-                  <div key={c.id} className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 hover:bg-slate-100/80 transition-colors">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="font-mono text-xs font-bold text-indigo-700">#{c.id?.slice(0, 8).toUpperCase()}</span>
+                  <div key={c.id} className="p-5 bg-slate-50/80 rounded-2xl border border-slate-200/80 hover:bg-slate-100/60 transition-colors space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-indigo-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        #{c.id?.slice(0, 8).toUpperCase()}
+                      </span>
                       <div className="flex items-center gap-1.5">
                         <PriorityBadge priority={formattedStatus(c.priority)} />
                         <StatusBadge status={formattedStatus(c.status)} />
                       </div>
                     </div>
-                    <p className="text-sm font-semibold text-slate-800 italic">"{c.text}"</p>
-                    <div className="flex items-center justify-between text-xs text-slate-500 font-medium mt-2 pt-2 border-t border-slate-200/60">
-                      <span>{c.address ? `📍 ${c.address}` : 'GPS coordinates'}</span>
+                    
+                    <p className="text-sm font-semibold text-slate-900 leading-snug">"{c.text}"</p>
+
+                    {/* Citizen Uploaded Image Evidence for Officer */}
+                    {c.image_url && (
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-indigo-600" style={{ fontSize: '16px' }}>photo_camera</span>
+                            Citizen Photo Evidence
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPhoto(c.image_url)}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+                          >
+                            View Fullscreen
+                          </button>
+                        </div>
+                        <div
+                          className="w-full max-h-56 overflow-hidden rounded-lg border border-slate-100 cursor-pointer bg-slate-950 flex items-center justify-center group"
+                          onClick={() => setSelectedPhoto(c.image_url)}
+                        >
+                          <img
+                            src={c.image_url}
+                            alt="Citizen report photo"
+                            className="max-h-52 w-full object-contain group-hover:scale-105 transition-transform"
+                          />
+                        </div>
+                        {c.extracted_text_from_image && (
+                          <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg font-medium">
+                            <span className="font-bold text-indigo-700">AI Vision Note: </span>
+                            "{c.extracted_text_from_image}"
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-slate-500 font-medium pt-2 border-t border-slate-200/60">
+                      <span>{c.address ? `📍 ${c.address}` : 'GPS point recorded'}</span>
                       <span>{new Date(c.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                     </div>
                   </div>
@@ -269,6 +312,36 @@ export default function IssueDetail() {
             </div>
           </div>
         </div>
+
+        {/* Photo Lightbox Modal */}
+        <AnimatePresence>
+          {selectedPhoto && (
+            <div
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+              onClick={() => setSelectedPhoto(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl relative p-2"
+                onClick={e => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => setSelectedPhoto(null)}
+                  className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-md transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+                </button>
+                <img
+                  src={selectedPhoto}
+                  alt="Full size evidence"
+                  className="max-h-[80vh] w-full object-contain rounded-2xl"
+                />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </AuthorityLayout>
   )

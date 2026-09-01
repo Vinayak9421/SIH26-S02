@@ -9,9 +9,12 @@ class LinkedComplaintPreview(BaseModel):
     priority: str
     status: str
     address: Optional[str] = None
+    image_url: Optional[str] = None
+    extracted_text_from_image: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class IssueStatusTimelineItem(BaseModel):

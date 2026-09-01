@@ -97,7 +97,7 @@ function LandingPage() {
       </main>
 
       <footer className="text-center text-body-sm text-on-surface-variant py-md border-t border-outline-variant/20">
-        CivicIssue AI · SIH 2026 · Built with ❤️ for smarter cities
+        CivicIssue AI · SIH 2026 · Built for smarter cities
       </footer>
     </div>
   )
