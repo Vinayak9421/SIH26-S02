@@ -1,19 +1,17 @@
-from .embedding_service import EmbeddingService
-from .classification_service import CategoryClassifier
-from .priority_service import compute_priority, PriorityResult
-from .geo_service import haversine_m, get_hotspot_key
-from .duplicate_service import match_issue, IssueCandidate
-from .analyze import analyze_complaint, AnalysisResult
+from app.services.ai.unified_analyzer import analyze_complaint, AnalysisResult
+from app.services.ai.image_extractor import extract_text_from_image
+from app.services.ai.embedding_service import generate_embedding, encode_texts
+from app.services.ai.classification_service import classify_text
+from app.services.ai.priority_service import compute_priority
+from app.services.ai.duplicate_service import match_duplicate_issue
 
 __all__ = [
-    "EmbeddingService",
-    "CategoryClassifier",
-    "compute_priority",
-    "PriorityResult",
-    "haversine_m",
-    "get_hotspot_key",
-    "match_issue",
-    "IssueCandidate",
     "analyze_complaint",
-    "AnalysisResult"
+    "AnalysisResult",
+    "extract_text_from_image",
+    "generate_embedding",
+    "encode_texts",
+    "classify_text",
+    "compute_priority",
+    "match_duplicate_issue"
 ]

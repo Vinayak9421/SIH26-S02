@@ -1,72 +1,62 @@
 import logging
-from typing import List
 import numpy as np
+from typing import List
 
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
-_model_instance = None
+# Suppress noisy HTTP cache requests from HuggingFace, sentence_transformers, and httpx
+for noisy_logger in ["httpx", "sentence_transformers", "huggingface_hub", "urllib3", "httpcore"]:
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
+_model = None
+
+def _get_model():
+    global _model
+    if _model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("Loaded sentence-transformers model: all-MiniLM-L6-v2")
+        except Exception as e:
+            logger.warning(f"Could not load sentence-transformers: {e}. Using hash-based pseudo vector encoder fallback.")
+            _model = "fallback"
+    return _model
+
+def generate_embedding(text: str) -> List[float]:
+    if not text or not text.strip():
+        return [0.0] * 384
+
+    model = _get_model()
+    if model != "fallback":
+        try:
+            vec = model.encode(text, normalize_embeddings=True, show_progress_bar=False)
+            return vec.tolist()
+        except Exception as e:
+            logger.error(f"Error encoding text: {e}")
+
+    import hashlib
+    seed_hash = hashlib.sha256(text.lower().encode('utf-8')).digest()
+    rng = np.random.RandomState(int.from_bytes(seed_hash[:4], byteorder='little'))
+    vec = rng.randn(384)
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec = vec / norm
+    return vec.tolist()
+
+def encode_texts(texts: List[str]) -> List[List[float]]:
+    model = _get_model()
+    if model != "fallback":
+        try:
+            vecs = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+            return vecs.tolist()
+        except Exception as e:
+            logger.error(f"Error encoding multiple texts: {e}")
+
+    return [generate_embedding(t) for t in texts]
 
 class EmbeddingService:
-    """
-    Multilingual Dense Embedding Service using sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2.
-    Produces 384-dimensional normalized vectors.
-    """
-
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"):
-        global _model_instance
-        self.model_name = model_name
-        self.dim = 384
-
-        if _model_instance is not None:
-            self.model = _model_instance
-        else:
-            try:
-                from sentence_transformers import SentenceTransformer
-                logger.info(f"Loading multilingual embedding model: {self.model_name}...")
-                self.model = SentenceTransformer(self.model_name)
-                _model_instance = self.model
-                logger.info("Multilingual embedding model loaded successfully.")
-            except Exception as e:
-                logger.warning(f"Could not load SentenceTransformer ({e}). Using deterministic token-hash vector fallback.")
-                self.model = None
-
     def encode_one(self, text: str) -> List[float]:
-        """Encode single text into a normalized 384-dimensional vector"""
-        if not text or not text.strip():
-            return [0.0] * self.dim
-
-        if self.model is not None:
-            vector = self.model.encode(text, normalize_embeddings=True)
-            return vector.tolist()
-
-        # Fallback 384-dim normalized hash projection
-        return self._fallback_encode(text)
+        return generate_embedding(text)
 
     def encode_many(self, texts: List[str]) -> List[List[float]]:
-        """Encode list of texts into normalized 384-dimensional vectors"""
-        if not texts:
-            return []
-
-        if self.model is not None:
-            vectors = self.model.encode(texts, normalize_embeddings=True)
-            return vectors.tolist()
-
-        return [self._fallback_encode(t) for t in texts]
-
-    def _fallback_encode(self, text: str) -> List[float]:
-        words = text.lower().split()
-        vec = np.zeros(self.dim, dtype=np.float32)
-        if not words:
-            return vec.tolist()
-
-        for word in words:
-            h = hash(word)
-            for shift in range(0, 32, 8):
-                bucket = (abs(h >> shift) ^ (len(word) * 31)) % self.dim
-                vec[bucket] += 1.0
-
-        norm = np.linalg.norm(vec)
-        if norm > 0:
-            vec = vec / norm
-        return vec.tolist()
+        return encode_texts(texts)

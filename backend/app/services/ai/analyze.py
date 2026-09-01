@@ -1,14 +1,13 @@
 import re
-from typing import TypedDict, Optional, List
+from typing import TypedDict, Optional, List, Dict, Any
+from app.services.ai.unified_analyzer import analyze_complaint as unified_analyze, AnalysisResult as UnifiedAnalysisResult
 from app.services.ai.embedding_service import EmbeddingService
 from app.services.ai.classification_service import CategoryClassifier
 from app.services.ai.priority_service import compute_priority
 from app.services.ai.duplicate_service import match_issue, IssueCandidate
 
-# Singleton AI services for fast inference
 _embedder = None
 _classifier = None
-
 
 def get_ai_pipeline():
     global _embedder, _classifier
@@ -17,7 +16,6 @@ def get_ai_pipeline():
     if _classifier is None:
         _classifier = CategoryClassifier(_embedder)
     return _embedder, _classifier
-
 
 class AnalysisResult(TypedDict):
     normalized_text: str
@@ -35,83 +33,83 @@ class AnalysisResult(TypedDict):
     matched_issue_title: Optional[str]
     semantic_similarity: Optional[float]
     distance_meters: Optional[int]
+    extracted_text_from_image: Optional[str]
     reason: Optional[str]
 
-
 def normalize_text(text: str) -> str:
+    if not text:
+        return ""
     cleaned = text.strip()
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned
 
-
 def analyze_complaint(
-    text: str,
+    text: Optional[str] = None,
+    image_bytes: Optional[bytes] = None,
+    image_filename: Optional[str] = None,
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
-    active_issues: Optional[List[IssueCandidate]] = None
+    active_issues: Optional[List[Any]] = None
 ) -> AnalysisResult:
     """
     Unified AI Analysis Pipeline matching Section 25.
-    1. Normalizes complaint text
-    2. Generates 384-dimensional dense sentence embeddings
-    3. Performs multilingual zero-shot classification & department routing
-    4. Computes explainable priority score & reasons
-    5. Matches against active Issues for semantic and geographic duplicate detection
+    Supports text, photo evidence, embeddings, classification, priority calculation, and duplicate matching.
     """
-    embedder, classifier = get_ai_pipeline()
-    clean_text = normalize_text(text)
+    # Convert IssueCandidate list to dicts if needed
+    dict_issues = []
+    if active_issues:
+        for iss in active_issues:
+            if isinstance(iss, dict):
+                dict_issues.append(iss)
+            else:
+                dict_issues.append({
+                    "id": str(getattr(iss, "id", "")),
+                    "category": getattr(iss, "category", ""),
+                    "title": getattr(iss, "title", ""),
+                    "embedding": getattr(iss, "embedding", []),
+                    "latitude": getattr(iss, "latitude", None),
+                    "longitude": getattr(iss, "longitude", None),
+                    "complaint_count": getattr(iss, "complaint_count", 0),
+                    "status": getattr(iss, "status", "open")
+                })
 
-    # 1. Generate 384-dimensional embedding
-    embedding = embedder.encode_one(clean_text)
-
-    # 2. Multilingual Category Classification
-    cls_result = classifier.classify(clean_text, precomputed_vector=embedding)
-    category = cls_result["category"]
-    department = cls_result["department"]
-    confidence = cls_result["confidence"]
-    needs_human_review = cls_result["needs_human_review"]
-
-    # 3. Duplicate and Issue Matching
-    dup_result = match_issue(
-        complaint_embedding=embedding,
-        category=category,
+    res = unified_analyze(
+        text=text,
+        image_bytes=image_bytes,
+        image_filename=image_filename,
         latitude=latitude,
         longitude=longitude,
-        active_issues=active_issues or []
+        active_issues=dict_issues
     )
 
-    duplicate_state = dup_result.get("state", "none")
-    matched_issue_id = dup_result.get("matched_issue_id")
-    matched_issue_title = dup_result.get("matched_issue_title")
-    similarity = dup_result.get("semantic_similarity")
-    distance = dup_result.get("distance_meters")
-    dup_reason = dup_result.get("reason")
+    department_names = {
+        "sanitation": "Solid Waste & Sanitation",
+        "water": "Water Supply",
+        "roads": "Roads & Infrastructure",
+        "streetlights": "Electrical / Street Lighting",
+        "health": "Public Health & Vector Control",
+        "traffic": "Traffic & Public Transport",
+        "general_review": "General Review Queue"
+    }
 
-    # 4. Priority Computation (with impact bonus if duplicate of existing issue)
-    existing_reports_count = 0
-    if active_issues and matched_issue_id:
-        for iss in active_issues:
-            if str(iss.id) == str(matched_issue_id):
-                existing_reports_count = iss.complaint_count
-                break
-
-    prio_result = compute_priority(clean_text, existing_issue_count=existing_reports_count)
+    dept_name = department_names.get(res["department_key"], "General Review Queue")
 
     return {
-        "normalized_text": clean_text,
-        "embedding": embedding,
-        "category": category,
-        "department_key": category,
-        "department": department,
-        "confidence": confidence,
-        "needs_human_review": needs_human_review,
-        "priority": prio_result.level,
-        "priority_score": prio_result.score,
-        "priority_reasons": prio_result.reasons,
-        "duplicate_state": duplicate_state,
-        "matched_issue_id": matched_issue_id,
-        "matched_issue_title": matched_issue_title,
-        "semantic_similarity": similarity,
-        "distance_meters": distance,
-        "reason": dup_reason
+        "normalized_text": res["normalized_text"],
+        "embedding": res["embedding"],
+        "category": res["category"],
+        "department_key": res["department_key"],
+        "department": dept_name,
+        "confidence": res["confidence"],
+        "needs_human_review": res["needs_human_review"],
+        "priority": res["priority"],
+        "priority_score": res["priority_score"],
+        "priority_reasons": res["priority_reasons"],
+        "duplicate_state": res["duplicate_state"],
+        "matched_issue_id": res["matched_issue_id"],
+        "matched_issue_title": res["matched_issue_title"],
+        "semantic_similarity": res["semantic_similarity"],
+        "distance_meters": res["distance_meters"],
+        "extracted_text_from_image": res["extracted_text_from_image"],
+        "reason": f"Matched state: {res['duplicate_state']}" if res["duplicate_state"] != "none" else None
     }

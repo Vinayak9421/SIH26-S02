@@ -23,7 +23,7 @@ router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
 
 @router.post("", response_model=ComplaintSubmitResponse, status_code=status.HTTP_201_CREATED)
-async def submit_complaint(
+def submit_complaint(
     payload: ComplaintCreate,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user)
@@ -39,7 +39,7 @@ async def submit_complaint(
 
 
 @router.get("/mine", response_model=List[ComplaintListItem])
-async def get_my_complaints(
+def get_my_complaints(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user)
 ):
@@ -50,7 +50,7 @@ async def get_my_complaints(
 
 
 @router.get("/{complaint_id}", response_model=ComplaintDetailResponse)
-async def get_complaint_detail(
+def get_complaint_detail(
     complaint_id: str,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user)

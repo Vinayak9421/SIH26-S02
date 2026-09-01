@@ -14,6 +14,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+# Suppress noisy HTTP cache requests from HuggingFace, sentence_transformers, and httpx
+for noisy_logger in ["httpx", "sentence_transformers", "huggingface_hub", "urllib3", "httpcore"]:
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

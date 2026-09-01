@@ -1,97 +1,100 @@
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
 import numpy as np
-from app.services.ai.geo_service import haversine_m
-from app.config import settings
+from math import radians, sin, cos, sqrt, atan2
+from typing import List, Dict, Any, Optional
 
+EARTH_RADIUS_M = 6_371_000
 
-@dataclass
 class IssueCandidate:
-    id: str
-    category: str
-    title: str
-    embedding: List[float]
-    latitude: Optional[float]
-    longitude: Optional[float]
-    complaint_count: int
-    status: str
+    def __init__(self, id: str, category: str, title: str, embedding: List[float], latitude: Optional[float] = None, longitude: Optional[float] = None, complaint_count: int = 0, status: str = "open"):
+        self.id = id
+        self.category = category
+        self.title = title
+        self.embedding = embedding
+        self.latitude = latitude
+        self.longitude = longitude
+        self.complaint_count = complaint_count
+        self.status = status
 
+def haversine_m(lat1: Optional[float], lon1: Optional[float], lat2: Optional[float], lon2: Optional[float]) -> Optional[float]:
+    if None in (lat1, lon1, lat2, lon2):
+        return None
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return EARTH_RADIUS_M * 2 * atan2(sqrt(a), sqrt(1 - a))
 
-def match_issue(
+def match_duplicate_issue(
     complaint_embedding: List[float],
     category: str,
     latitude: Optional[float],
     longitude: Optional[float],
-    active_issues: List[IssueCandidate]
+    active_issues: List[Any]
 ) -> Dict[str, Any]:
-    """
-    Semantic and Spatial Duplicate Matching against active Issues.
-    """
-    if not active_issues:
-        return {"state": "none"}
+    if not complaint_embedding or not active_issues:
+        return {"duplicate_state": "none", "state": "none", "matched_issue_id": None, "matched_issue_title": None, "semantic_similarity": None, "distance_meters": None, "reason": None}
 
-    query = np.array(complaint_embedding, dtype=np.float32)
-    norm_q = np.linalg.norm(query)
-    if norm_q > 0:
-        query = query / norm_q
-
-    best = None
+    query = np.array(complaint_embedding)
+    best_candidate = None
 
     for issue in active_issues:
-        # Match only within same category and active status
-        if issue.category != category or issue.status == "resolved":
+        iss_id = getattr(issue, "id", None) if not isinstance(issue, dict) else issue.get("id")
+        iss_category = getattr(issue, "category", None) if not isinstance(issue, dict) else issue.get("category")
+        iss_title = getattr(issue, "title", "Untitled Issue") if not isinstance(issue, dict) else issue.get("title", "Untitled Issue")
+        iss_embedding = getattr(issue, "embedding", None) if not isinstance(issue, dict) else issue.get("embedding")
+        iss_lat = getattr(issue, "latitude", None) if not isinstance(issue, dict) else issue.get("latitude")
+        iss_lng = getattr(issue, "longitude", None) if not isinstance(issue, dict) else issue.get("longitude")
+
+        if iss_category and iss_category != category:
             continue
 
-        if not issue.embedding:
+        if not iss_embedding:
             continue
 
-        issue_vec = np.array(issue.embedding, dtype=np.float32)
-        norm_i = np.linalg.norm(issue_vec)
-        if norm_i > 0:
-            issue_vec = issue_vec / norm_i
+        similarity = float(np.dot(query, np.array(iss_embedding)))
+        distance = haversine_m(latitude, longitude, iss_lat, iss_lng)
 
-        similarity = float(np.dot(query, issue_vec))
-        distance = haversine_m(latitude, longitude, issue.latitude, issue.longitude)
-
-        # Distant reports (> 1000m) are treated as distinct local issues even if text is identical
         if distance is not None and distance > 1000:
             continue
 
         candidate = {
-            "issue": issue,
+            "issue_id": str(iss_id),
+            "issue_title": iss_title,
             "similarity": similarity,
             "distance": distance
         }
 
-        if best is None or candidate["similarity"] > best["similarity"]:
-            best = candidate
+        if best_candidate is None or candidate["similarity"] > best_candidate["similarity"]:
+            best_candidate = candidate
 
-    if best is None:
-        return {"state": "none"}
+    if best_candidate is None:
+        return {"duplicate_state": "none", "state": "none", "matched_issue_id": None, "matched_issue_title": None, "semantic_similarity": None, "distance_meters": None, "reason": None}
 
-    sim = best["similarity"]
-    distance = best["distance"]
+    sim = best_candidate["similarity"]
+    distance = best_candidate["distance"]
 
-    # Decision rule: High similarity (>= 0.82) + close (<= 500m) -> Linked
-    if sim >= settings.DUPLICATE_LINKED_THRESHOLD and (distance is None or distance <= settings.DUPLICATE_LINKED_MAX_DISTANCE_M):
+    if sim >= 0.82 and (distance is None or distance <= 500):
         return {
+            "duplicate_state": "linked",
             "state": "linked",
-            "matched_issue_id": str(best["issue"].id),
-            "matched_issue_title": best["issue"].title,
+            "matched_issue_id": best_candidate["issue_id"],
+            "matched_issue_title": best_candidate["issue_title"],
             "semantic_similarity": round(sim, 3),
             "distance_meters": round(distance) if distance is not None else None,
-            "reason": "Same category, highly similar description, and nearby active issue"
+            "reason": "Same category, high similarity, and nearby active issue"
         }
 
-    # Decision rule: Moderate similarity (>= 0.74) + moderate distance (<= 750m) -> Possible
-    if sim >= settings.DUPLICATE_POSSIBLE_THRESHOLD and (distance is None or distance <= settings.DUPLICATE_POSSIBLE_MAX_DISTANCE_M):
+    if sim >= 0.74 and (distance is None or distance <= 750):
         return {
+            "duplicate_state": "possible",
             "state": "possible",
-            "matched_issue_id": str(best["issue"].id),
-            "matched_issue_title": best["issue"].title,
+            "matched_issue_id": best_candidate["issue_id"],
+            "matched_issue_title": best_candidate["issue_title"],
             "semantic_similarity": round(sim, 3),
             "distance_meters": round(distance) if distance is not None else None,
-            "reason": "Probable duplicate candidate found nearby"
+            "reason": "Possible duplicate candidate"
         }
 
-    return {"state": "none"}
+    return {"duplicate_state": "none", "state": "none", "matched_issue_id": None, "matched_issue_title": None, "semantic_similarity": round(sim, 3) if sim else None, "distance_meters": round(distance) if distance else None, "reason": None}
+
+def match_issue(complaint_embedding, category, latitude, longitude, active_issues):
+    return match_duplicate_issue(complaint_embedding, category, latitude, longitude, active_issues)

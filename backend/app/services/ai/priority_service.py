@@ -1,41 +1,36 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Any
 
 SAFETY_TERMS = [
     "fire", "sparking", "electric shock", "exposed wire", "live wire",
-    "accident", "collapse", "gas leak", "dangerous", "hazard", "open wire",
+    "accident", "collapse", "gas leak", "dangerous", "hazard",
     "आग", "करंट", "खुला तार", "दुर्घटना", "खतरा"
 ]
 
 EMERGENCY_TERMS = [
     "emergency", "immediately", "urgent", "immediate", "jaldi",
-    "तुरंत", "आपातकाल", "जल्दी"
+    "तुरंत", "आपातकाल"
 ]
 
 HEALTH_TERMS = [
-    "mosquito", "mosquitoes", "disease", "sewage", "contaminated", "stagnant water",
-    "machhar", "ganda paani", "मच्छर", "बीमारी", "गंदा पानी", "dengue", "malaria"
+    "mosquito", "disease", "sewage", "contaminated", "stagnant water",
+    "machhar", "ganda paani", "मच्छर", "बीमारी", "गंदा पानी", "dengue"
 ]
 
 SENSITIVE_LOCATION_TERMS = [
     "school", "hospital", "junction", "market", "children",
-    "school ke paas", "hospital ke paas", "स्कूल", "अस्पताल", "मार्केट"
+    "school ke paas", "hospital ke paas", "स्कूल", "अस्पताल"
 ]
 
 DURATION_TERMS = [
-    "since", "days", "weeks", "three days", "repeatedly", "teen din",
-    "din se", "hafton se", "दिनों से", "कई दिन", "3 days"
+    "since", "days", "weeks", "three days", "repeatedly",
+    "din se", "hafton se", "दिनों से", "कई दिन"
 ]
 
 WIDESPREAD_TERMS = [
     "entire", "whole", "all residents", "many people", "whole lane",
-    "poori gali", "poora ward", "पूरा", "सभी", "colony", "society"
+    "poori gali", "poora ward", "पूरा", "सभी"
 ]
-
-EMERGENCY_OVERRIDE_TERMS = [
-    "fire", "electric shock", "gas leak", "collapse", "आग", "करंट", "गैस रिसाव"
-]
-
 
 @dataclass
 class PriorityResult:
@@ -43,16 +38,17 @@ class PriorityResult:
     score: int
     reasons: List[str]
 
-
 def contains_any(text: str, terms: List[str]) -> bool:
     normalized = text.lower()
     return any(term.lower() in normalized for term in terms)
 
-
 def compute_priority(text: str, existing_issue_count: int = 0) -> PriorityResult:
     """
-    Computes explainable priority score and level based on transparent rule set.
+    Computes deterministic priority level, priority score (0-100), and explainable reasons.
     """
+    if not text:
+        return PriorityResult("low", 0, ["Empty complaint text"])
+
     score = 0
     reasons = []
 
@@ -85,8 +81,8 @@ def compute_priority(text: str, existing_issue_count: int = 0) -> PriorityResult
         score += impact_bonus
         reasons.append(f"Existing citizen impact: {existing_issue_count} linked reports (+{impact_bonus})")
 
-    # Critical override for life-safety triggers
-    if contains_any(text, EMERGENCY_OVERRIDE_TERMS):
+    # Critical override for severe life safety hazards
+    if contains_any(text, ["fire", "electric shock", "gas leak", "collapse", "आग", "करंट"]):
         return PriorityResult("critical", max(score, 75), reasons + ["Emergency safety override applied"])
 
     if score >= 71:
@@ -98,8 +94,4 @@ def compute_priority(text: str, existing_issue_count: int = 0) -> PriorityResult
     else:
         level = "low"
 
-    return PriorityResult(
-        level=level,
-        score=score,
-        reasons=reasons or ["Standard non-elevated civic grievance"]
-    )
+    return PriorityResult(level, min(score, 100), reasons or ["Standard civic report signal"])
