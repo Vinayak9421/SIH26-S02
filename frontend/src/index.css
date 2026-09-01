@@ -1,16 +1,149 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  color: #1c1b1b;
+  background-color: #f7f8fa;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #0f172a;
-  color: #f8fafc;
+  background-color: #f7f8fa;
+  color: #1c1b1b;
 }
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  /* Glass card effect */
+  .glass-card {
+    @apply bg-white/95 backdrop-blur-sm border border-white/20 shadow-card transition-all duration-300;
+  }
+  .glass-card:hover {
+    @apply shadow-card-hover -translate-y-0.5;
+  }
+
+  /* AI Suggested Tag */
+  .ai-tag {
+    background: linear-gradient(135deg, #ede7f6 0%, #d1c4e9 100%);
+    color: #5e35b1;
+    border: 1px solid #b39ddb;
+  }
+
+  /* Status badges */
+  .badge-critical {
+    @apply bg-red-50 text-red-700 border border-red-200;
+  }
+  .badge-high {
+    @apply bg-orange-50 text-orange-700 border border-orange-200;
+  }
+  .badge-medium {
+    @apply bg-blue-50 text-blue-700 border border-blue-200;
+  }
+  .badge-low {
+    @apply bg-gray-100 text-gray-600 border border-gray-200;
+  }
+  .badge-pending {
+    @apply bg-blue-50 text-blue-700 border border-blue-200;
+  }
+  .badge-in-progress {
+    @apply bg-orange-50 text-orange-700 border border-orange-200;
+  }
+  .badge-resolved {
+    @apply bg-green-50 text-green-700 border border-green-200;
+  }
+  .badge-open {
+    @apply bg-red-50 text-red-700 border border-red-200;
+  }
+
+  /* Table styling */
+  .data-table thead th {
+    @apply bg-surface-container-low text-on-surface-variant text-label-md uppercase tracking-wider px-md py-sm sticky top-0;
+  }
+  .data-table tbody tr {
+    @apply border-b border-outline-variant/30 hover:bg-surface-container-low/60 transition-colors;
+  }
+  .data-table tbody tr:nth-child(even) {
+    @apply bg-surface-container/40;
+  }
+  .data-table td {
+    @apply px-md py-sm text-table-data text-on-surface;
+  }
+
+  /* Input field styling */
+  .form-input {
+    @apply w-full rounded-md border border-outline-variant bg-white px-md py-[10px] text-body-md text-on-surface transition-all duration-200;
+    @apply focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20;
+    @apply placeholder:text-outline;
+  }
+  .form-label {
+    @apply block text-label-md text-on-surface-variant mb-xs;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply bg-primary-container text-on-primary font-semibold text-label-md px-md py-sm rounded-md transition-all duration-200;
+    @apply hover:shadow-md hover:-translate-y-px active:translate-y-0 active:shadow-sm;
+  }
+
+  /* Outlined button */
+  .btn-outlined {
+    @apply border border-primary-container text-primary-container font-semibold text-label-md px-md py-sm rounded-md transition-all duration-200;
+    @apply hover:bg-primary-container/5;
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-sm px-md py-sm rounded-lg text-body-md text-on-surface-variant transition-all duration-200 cursor-pointer;
+    @apply hover:bg-surface-container-high hover:text-on-surface;
+  }
+  .nav-item.active {
+    @apply bg-primary-container/10 text-primary-container font-semibold;
+  }
+
+  /* Critical row highlight */
+  .row-critical {
+    @apply border-l-4 border-l-red-500 bg-red-50/40;
+  }
+  .row-high {
+    @apply border-l-4 border-l-orange-400;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f0eded; }
+::-webkit-scrollbar-thumb { background: #c2c6d4; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #727783; }
+
+/* Smooth transitions */
+.page-enter { animation: fade-in 0.3s ease-out; }
