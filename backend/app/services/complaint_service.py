@@ -111,9 +111,23 @@ class ComplaintService:
         # 1. Fetch active candidate issues
         candidates = cls.get_active_issue_candidates(db)
 
-        # 2. Run AI intelligence pipeline
+        # 2. Extract image bytes if image_b64 provided
+        img_bytes = None
+        image_url_to_save = payload.image_url or payload.image_b64
+        if payload.image_b64:
+            import base64
+            try:
+                b64_str = payload.image_b64
+                if "," in b64_str:
+                    b64_str = b64_str.split(",", 1)[1]
+                img_bytes = base64.b64decode(b64_str)
+            except Exception as e:
+                logger.warning(f"Failed to decode image_b64: {e}")
+
+        # Run AI intelligence pipeline with Vision & Text
         ai_res = analyze_complaint(
             text=payload.text,
+            image_bytes=img_bytes,
             latitude=payload.latitude,
             longitude=payload.longitude,
             active_issues=candidates
@@ -150,7 +164,8 @@ class ComplaintService:
 
         if not target_issue:
             # 4. Create New Issue
-            issue_title = payload.text.strip().split("\n")[0]
+            effective_text = payload.text or ai_res.get("extracted_text_from_image") or "Civic Complaint Photo Submission"
+            issue_title = effective_text.strip().split("\n")[0]
             if len(issue_title) > 90:
                 issue_title = issue_title[:87] + "..."
 
@@ -159,7 +174,7 @@ class ComplaintService:
             target_issue = Issue(
                 department_id=str(department_id),
                 title=issue_title,
-                summary=payload.text[:200],
+                summary=effective_text[:200],
                 category=category,
                 representative_embedding=json.dumps(ai_res["embedding"]),
                 priority=ai_res["priority"],
@@ -186,19 +201,29 @@ class ComplaintService:
             else:
                 issue_action = "created_new_issue"
 
-        # 5. Create Complaint Record
+        # 5. Create Complaint Record - safely handle demo string IDs (e.g. citizen-001)
+        user_uuid = _safe_uuid(current_user.id)
+        if not user_uuid:
+            from app.models.profile import Profile
+            demo_user = db.query(Profile).filter(Profile.role == "citizen").first()
+            if not demo_user:
+                demo_user = db.query(Profile).first()
+            user_uuid = str(demo_user.id) if demo_user else str(_uuid_mod.uuid4())
+
         new_complaint = Complaint(
-            user_id=str(current_user.id),
+            user_id=user_uuid,
             issue_id=str(target_issue.id),
             department_id=str(department_id) if department_id else None,
-            text=payload.text,
+            text=payload.text or ai_res.get("extracted_text_from_image") or "Photo evidence attached",
+            image_url=image_url_to_save,
+            extracted_text_from_image=ai_res.get("extracted_text_from_image"),
             normalized_text=ai_res["normalized_text"],
             embedding=json.dumps(ai_res["embedding"]),
             ai_category=category,
             ai_confidence=ai_res["confidence"],
             priority=ai_res["priority"],
             priority_score=ai_res["priority_score"],
-            priority_reasons=json.dumps(ai_res["priority_reasons"]),  # json string -> jsonb cast by PostgreSQL
+            priority_reasons=json.dumps(ai_res["priority_reasons"]),
             duplicate_state=duplicate_state,
             duplicate_of_issue_id=str(matched_issue_id) if matched_issue_id and duplicate_state == "linked" else None,
             status="pending",
@@ -246,7 +271,15 @@ class ComplaintService:
     @classmethod
     def get_citizen_complaints(cls, db: Session, user_id: str) -> List[ComplaintListItem]:
         """Get all complaints for a citizen (uses user_id column in NeonDB)."""
-        complaints = db.query(Complaint).filter(Complaint.user_id == user_id).order_by(desc(Complaint.created_at)).all()
+        target_uuid = _safe_uuid(user_id)
+        if not target_uuid:
+            from app.models.profile import Profile
+            demo_user = db.query(Profile).filter(Profile.role == "citizen").first()
+            if not demo_user:
+                demo_user = db.query(Profile).first()
+            target_uuid = str(demo_user.id) if demo_user else user_id
+
+        complaints = db.query(Complaint).filter(Complaint.user_id == target_uuid).order_by(desc(Complaint.created_at)).all()
         items = []
         for c in complaints:
             dept_name = c.department.name if c.department else (CATEGORY_DEPARTMENT_MAPPING.get(c.ai_category, c.ai_category) if c.ai_category else None)
@@ -254,6 +287,8 @@ class ComplaintService:
                 ComplaintListItem(
                     id=str(c.id),
                     text=c.text,
+                    image_url=c.image_url,
+                    extracted_text_from_image=c.extracted_text_from_image,
                     category=c.ai_category,
                     department=dept_name,
                     priority=c.priority,
@@ -303,6 +338,8 @@ class ComplaintService:
         return ComplaintDetailResponse(
             id=str(complaint.id),
             text=complaint.text,
+            image_url=complaint.image_url,
+            extracted_text_from_image=complaint.extracted_text_from_image,
             status=complaint.status,
             category=complaint.ai_category,
             department=dept_name,

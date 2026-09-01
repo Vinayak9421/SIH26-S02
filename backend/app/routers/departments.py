@@ -34,4 +34,15 @@ async def list_departments(
         db.commit()
         departments = db.query(Department).filter(Department.active == True).all()
 
-    return departments
+    res = []
+    for d in departments:
+        res.append(
+            DepartmentResponse(
+                id=str(d.id),
+                name=d.name,
+                category_key=d.category_key,
+                description=d.description,
+                active=d.active
+            )
+        )
+    return res

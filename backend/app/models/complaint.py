@@ -17,7 +17,9 @@ class Complaint(Base):
     issue_id = Column(String(36), ForeignKey("issues.id", ondelete="SET NULL"), nullable=True, index=True)
     department_id = Column(String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     
-    text = Column(Text, nullable=False)
+    text = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)
+    extracted_text_from_image = Column(Text, nullable=True)
     normalized_text = Column(Text, nullable=True)
     language_hint = Column(String(20), default="en", nullable=True)
     embedding = Column(Text, nullable=True)  # Serialized 384-dim vector

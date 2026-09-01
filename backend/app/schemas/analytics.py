@@ -1,4 +1,5 @@
-from typing import List, Optional
+from uuid import UUID
+from typing import List, Optional, Union
 from pydantic import BaseModel, ConfigDict
 
 
@@ -32,7 +33,7 @@ class HotspotItem(BaseModel):
 
 
 class MapIssueMarker(BaseModel):
-    id: str
+    id: Union[str, UUID]
     title: str
     category: str
     priority: str
@@ -46,7 +47,7 @@ class MapIssueMarker(BaseModel):
 
 
 class DepartmentResponse(BaseModel):
-    id: str
+    id: Union[str, UUID]
     name: str
     category_key: str
     description: Optional[str] = None

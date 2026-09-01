@@ -249,6 +249,12 @@ export default function CitizenDashboard() {
                   {c.category && <CategoryBadge category={c.category.replace(/_/g, ' ')} />}
                   <PriorityBadge priority={c.priority?.charAt(0).toUpperCase() + c.priority?.slice(1)} />
                   {c.department && <AiTag label={c.department} confidence={null} />}
+                  {c.image_url && (
+                    <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 font-semibold px-sm py-[2px] rounded-full flex items-center gap-[2px]">
+                      <span className="material-symbols-outlined text-[14px]">image</span>
+                      Photo Attached
+                    </span>
+                  )}
                   {c.satisfaction_rating && (
                     <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 font-semibold px-sm py-[2px] rounded-full flex items-center gap-[2px]">
                       <span className="material-symbols-outlined text-[14px] text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>

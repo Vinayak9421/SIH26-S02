@@ -22,9 +22,85 @@ export default function SubmitComplaint() {
     category: '',
     language: 'English',
   })
+  
+  // Image Upload state
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageB64, setImageB64] = useState(null)
+  const [imageName, setImageName] = useState('')
+
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [locating, setLocating] = useState(false)
   const [result, setResult] = useState(null)
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file (PNG, JPG, JPEG)')
+      return
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Image size must be less than 15MB')
+      return
+    }
+
+    setImageName(file.name)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const rawB64 = event.target.result
+      const img = new Image()
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          const MAX_WIDTH = 1200
+          const MAX_HEIGHT = 1200
+          let width = img.width
+          let height = img.height
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width
+              width = MAX_WIDTH
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height
+              height = MAX_HEIGHT
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+
+          const compressedB64 = canvas.toDataURL('image/jpeg', 0.85)
+          setImagePreview(compressedB64)
+          setImageB64(compressedB64)
+          toast.success('Photo attached! Ready for AI Vision analysis.')
+        } catch (err) {
+          setImagePreview(rawB64)
+          setImageB64(rawB64)
+          toast.success('Photo attached!')
+        }
+      }
+      img.onerror = () => {
+        setImagePreview(rawB64)
+        setImageB64(rawB64)
+        toast.success('Photo attached!')
+      }
+      img.src = rawB64
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveImage = () => {
+    setImagePreview(null)
+    setImageB64(null)
+    setImageName('')
+  }
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
@@ -52,9 +128,19 @@ export default function SubmitComplaint() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    const hasText = formData.description.trim().length >= 5
+    const hasImage = !!imageB64
+
+    if (!hasText && !hasImage) {
+      toast.error('Please provide a description or upload a photo of the complaint.')
+      return
+    }
+
     try {
       const payload = {
-        text: formData.description,
+        text: formData.description.trim() || undefined,
+        image_b64: imageB64 || undefined,
         address: formData.address || undefined,
         latitude: formData.latitude || undefined,
         longitude: formData.longitude || undefined,
@@ -62,9 +148,11 @@ export default function SubmitComplaint() {
       const data = await submitMutation.mutateAsync(payload)
       setResult(data)
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to submit complaint. Make sure the backend is running.')
+      toast.error(err.response?.data?.detail || 'Failed to submit complaint. Make sure backend is running.')
     }
   }
+
+  const canSubmit = (formData.description.trim().length >= 5 || !!imageB64) && !submitMutation.isPending
 
   if (result) {
     return (
@@ -87,7 +175,7 @@ export default function SubmitComplaint() {
               <div className="glass-card rounded-xl p-md">
                 <div className="flex items-center gap-sm mb-sm">
                   <span className="material-symbols-outlined text-[#7c4dff]" style={{ fontSize: '18px', fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-                  <h2 className="text-headline-md font-semibold text-on-surface">AI Analysis Complete</h2>
+                  <h2 className="text-headline-md font-semibold text-on-surface">AI Vision & Text Analysis Complete</h2>
                 </div>
                 <div className="space-y-xs">
                   <div className="flex justify-between text-body-md">
@@ -104,7 +192,7 @@ export default function SubmitComplaint() {
                   </div>
                   <div className="flex justify-between text-body-md">
                     <span className="text-on-surface-variant">Priority</span>
-                    <span className="font-semibold capitalize text-on-surface">{result.priority?.level}</span>
+                    <span className="font-semibold capitalize text-on-surface">{result.priority?.level} ({result.priority?.score}/100)</span>
                   </div>
                   {result.duplicate?.state !== 'none' && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-sm mt-sm">
@@ -150,21 +238,54 @@ export default function SubmitComplaint() {
               Back to Dashboard
             </button>
             <h1 className="text-headline-lg text-on-surface font-semibold">Submit a Complaint</h1>
-            <p className="text-body-md text-on-surface-variant mt-xs">Describe your issue and our AI will categorize and route it automatically.</p>
+            <p className="text-body-md text-on-surface-variant mt-xs">Upload a photo of the civic issue or write a description. AI Vision will analyze & route it automatically.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-lg">
+            
+            {/* Image Upload Box */}
+            <div className="glass-card rounded-xl p-md space-y-sm">
+              <label className="block text-label-md text-on-surface-variant flex items-center justify-between">
+                <span className="flex items-center gap-xs font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '20px' }}>photo_camera</span>
+                  Upload Complaint Photo <span className="text-xs text-on-surface-variant font-normal">(Optional if text provided)</span>
+                </span>
+              </label>
+
+              {imagePreview ? (
+                <div className="relative rounded-lg overflow-hidden border border-outline-variant bg-surface-container flex flex-col items-center p-sm">
+                  <img src={imagePreview} alt="Complaint preview" className="max-h-56 rounded-md object-contain mb-xs" />
+                  <div className="w-full flex items-center justify-between px-sm py-xs bg-white/80 rounded-md">
+                    <span className="text-body-sm text-on-surface font-medium truncate max-w-[250px]">{imageName}</span>
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="text-error hover:bg-error-container/20 px-sm py-xs rounded text-body-sm font-semibold flex items-center gap-xs transition-colors"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-outline-variant hover:border-primary-container rounded-xl p-md flex flex-col items-center justify-center cursor-pointer bg-white hover:bg-primary-container/5 transition-all text-center group">
+                  <span className="material-symbols-outlined text-outline group-hover:text-primary-container mb-xs" style={{ fontSize: '36px' }}>add_a_photo</span>
+                  <p className="text-body-md font-medium text-on-surface">Click to upload photo evidence</p>
+                  <p className="text-body-sm text-on-surface-variant">PNG, JPG or JPEG (Max 10MB)</p>
+                  <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                </label>
+              )}
+            </div>
+
             {/* Description */}
             <div className="glass-card rounded-xl p-md space-y-sm">
-              <label className="block text-label-md text-on-surface-variant" htmlFor="complaint-desc">
-                Describe your complaint <span className="text-error">*</span>
+              <label className="block text-label-md text-on-surface-variant font-semibold text-on-surface" htmlFor="complaint-desc">
+                Describe your complaint <span className="text-xs text-on-surface-variant font-normal">(Optional if photo uploaded)</span>
               </label>
               <textarea
                 id="complaint-desc"
-                rows={5}
+                rows={4}
                 placeholder="Ward 12 mein school ke paas teen din se kachra nahi uthaya gaya..."
-                required
-                minLength={10}
                 value={formData.description}
                 onChange={e => setFormData({ ...formData, description: e.target.value })}
                 className="w-full rounded-md border border-outline-variant bg-white px-md py-sm text-body-lg text-on-surface resize-none focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 placeholder:text-outline transition-all"
@@ -172,9 +293,9 @@ export default function SubmitComplaint() {
               <div className="flex items-center justify-between">
                 <p className="text-body-sm text-on-surface-variant flex items-center gap-xs">
                   <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>translate</span>
-                  You can write in English, Hindi, or Hinglish.
+                  Supports English, Hindi, or Hinglish.
                 </p>
-                <span className={`text-body-sm ${formData.description.length < 10 ? 'text-error' : 'text-green-600'}`}>
+                <span className="text-body-sm text-on-surface-variant">
                   {formData.description.length} chars
                 </span>
               </div>
@@ -195,7 +316,6 @@ export default function SubmitComplaint() {
                     onChange={e => setFormData({ ...formData, address: e.target.value })}
                     className="w-full rounded-md border border-outline-variant bg-white px-md py-[10px] text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 transition-all"
                   />
-                  <p className="text-body-sm text-on-surface-variant mt-xs">Our AI will geocode this to place it on the city map.</p>
                 </div>
                 <button
                   type="button"
@@ -272,11 +392,11 @@ export default function SubmitComplaint() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitMutation.isPending || formData.description.length < 10}
+              disabled={!canSubmit}
               className="w-full bg-primary-container text-on-primary font-semibold text-body-lg py-md rounded-xl hover:shadow-md hover:-translate-y-px transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-sm"
             >
               {submitMutation.isPending
-                ? <><span className="animate-spin material-symbols-outlined" style={{ fontSize: '22px' }}>progress_activity</span> Analyzing with AI…</>
+                ? <><span className="animate-spin material-symbols-outlined" style={{ fontSize: '22px' }}>progress_activity</span> Analyzing Photo & Text with AI…</>
                 : <><span className="material-symbols-outlined" style={{ fontSize: '22px' }}>send</span> Submit Complaint</>
               }
             </button>

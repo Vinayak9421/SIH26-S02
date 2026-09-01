@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 15000,
+  timeout: 45000,
 })
 
 // Request interceptor: inject JWT Authorization header

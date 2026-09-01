@@ -4,7 +4,9 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class ComplaintCreate(BaseModel):
-    text: str = Field(..., min_length=10, max_length=2000, description="Citizen complaint description")
+    text: Optional[str] = Field(default=None, max_length=2000, description="Citizen complaint description")
+    image_b64: Optional[str] = Field(default=None, description="Base64 encoded complaint photo")
+    image_url: Optional[str] = Field(default=None, description="Image URL or data URI")
     address: Optional[str] = Field(default=None, max_length=300, description="Address or landmark")
     latitude: Optional[float] = Field(default=None, ge=-90.0, le=90.0, description="GPS Latitude")
     longitude: Optional[float] = Field(default=None, ge=-180.0, le=180.0, description="GPS Longitude")
@@ -51,6 +53,8 @@ class ComplaintTimelineItem(BaseModel):
 class ComplaintDetailResponse(BaseModel):
     id: str
     text: str
+    image_url: Optional[str] = None
+    extracted_text_from_image: Optional[str] = None
     status: str
     category: Optional[str] = None
     department: Optional[str] = None
@@ -77,6 +81,8 @@ class ComplaintDetailResponse(BaseModel):
 class ComplaintListItem(BaseModel):
     id: str
     text: str
+    image_url: Optional[str] = None
+    extracted_text_from_image: Optional[str] = None
     category: Optional[str] = None
     department: Optional[str] = None
     priority: str

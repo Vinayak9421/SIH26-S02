@@ -159,6 +159,36 @@ export default function ComplaintTracking() {
             </div>
           </div>
 
+          {/* Attached Photo Evidence Card */}
+          {complaint.image_url && (
+            <div className="glass-card rounded-xl p-md space-y-sm mb-lg border border-primary-container/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-xs text-body-md font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '20px' }}>photo_camera</span>
+                  Uploaded Evidence Photo
+                </div>
+                <span className="text-xs bg-surface-container px-sm py-[2px] rounded-full text-on-surface-variant font-medium">
+                  Verified Artifact
+                </span>
+              </div>
+              <div className="rounded-lg overflow-hidden border border-outline-variant/40 max-h-96 bg-slate-900/5 flex items-center justify-center p-xs">
+                <img
+                  src={complaint.image_url}
+                  alt="Citizen uploaded complaint photo"
+                  className="max-h-90 w-full object-contain rounded-md shadow-sm"
+                />
+              </div>
+              {complaint.extracted_text_from_image && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-sm mt-xs">
+                  <p className="text-body-sm text-slate-700">
+                    <span className="font-semibold text-primary-container">AI Vision Summary: </span>
+                    "{complaint.extracted_text_from_image}"
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Citizen Satisfaction Rating Section (Visible when Resolved) */}
           {complaint.status === 'resolved' && (
             <motion.div
