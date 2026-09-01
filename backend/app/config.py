@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     # AI & Multilingual Model
     MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    OPENCAGE_API_KEY: str = ""
+
 
     # Duplicate Detection Parameters
     DUPLICATE_LINKED_THRESHOLD: float = 0.82
